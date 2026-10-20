@@ -223,5 +223,11 @@ class OpenRouterRepository(
                 ).also { instance = it }
             }
         }
+
+        fun resetInstance() {
+            synchronized(this) {
+                instance = null
+            }
+        }
     }
 }

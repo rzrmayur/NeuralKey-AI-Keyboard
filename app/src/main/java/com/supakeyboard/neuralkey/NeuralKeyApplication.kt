@@ -69,6 +69,8 @@ class NeuralKeyApplication : Application() {
 
     override fun onTerminate() {
         applicationScope.cancel()
+        OpenRouterRepository.resetInstance()
+        NeuralKeyDatabase.resetInstance()
         super.onTerminate()
     }
 

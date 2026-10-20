@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -107,11 +108,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -164,6 +168,10 @@ private data class DashboardTabItem(
     val icon: ImageVector
 )
 
+private fun onAccentColor(accent: Color): Color {
+    return if (accent.luminance() > 0.42f) Color(0xFF090A0F) else Color.White
+}
+
 @Composable
 fun CompanionDashboard() {
     val context = LocalContext.current
@@ -183,14 +191,12 @@ fun CompanionDashboard() {
 
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // Live reactive telemetry for the hero header
     val activeModel by repository.activeModel.collectAsState(initial = null)
     val selectedThemeId by preferences.selectedTheme.collectAsState(initial = "CYBERPUNK_NEON")
     val activeTheme = remember(selectedThemeId) { KeyboardThemes.getTheme(selectedThemeId) }
     val learnedWordsCount by keyMemoryStore.learnedWordCount.collectAsState()
     val oneHandedMode by preferences.oneHandedMode.collectAsState(initial = OneHandedMode.OFF)
 
-    // IME Status tracking
     var isEnabled by remember { mutableStateOf(checkIsImeEnabled(context)) }
     var isSelected by remember { mutableStateOf(checkIsImeSelected(context)) }
 
@@ -202,17 +208,16 @@ fun CompanionDashboard() {
     val tabs = remember {
         listOf(
             DashboardTabItem(0, "Setup", Icons.Default.PhonelinkSetup),
-            DashboardTabItem(1, "Smart Typing", Icons.Default.Memory),
-            DashboardTabItem(2, "AI Studio", Icons.Default.AutoAwesome),
+            DashboardTabItem(1, "Typing", Icons.Default.Memory),
+            DashboardTabItem(2, "AI Tools", Icons.Default.AutoAwesome),
             DashboardTabItem(3, "Models", Icons.Default.Keyboard),
             DashboardTabItem(4, "Themes", Icons.Default.Palette)
         )
     }
 
-    // Animated pulsing glow for status dot
     val infiniteTransition = rememberInfiniteTransition(label = "statusPulse")
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
+        initialValue = 0.90f,
         targetValue = 1.15f,
         animationSpec = infiniteRepeatable(
             animation = tween(1200, easing = FastOutSlowInEasing),
@@ -238,29 +243,31 @@ fun CompanionDashboard() {
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                activeTheme.accentPrimary.copy(alpha = 0.16f),
-                                Color(0xFF10121C),
+                                activeTheme.accentPrimary.copy(alpha = 0.14f),
+                                Color(0xFF11131E),
                                 Color(0xFF090A0F)
                             )
                         )
                     )
                     .statusBarsPadding()
-                    .padding(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 8.dp)
+                    .padding(top = 12.dp, start = 16.dp, end = 16.dp, bottom = 10.dp)
             ) {
-                // Hero Title & Animated Live Status Pill
+                // Hero Header Row: Left side uses weight(1f) so the right status pill is measured first and never wraps
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(11.dp))
                                 .background(
                                     Brush.linearGradient(
                                         colors = listOf(activeTheme.accentPrimary, activeTheme.accentSecondary)
@@ -268,18 +275,21 @@ fun CompanionDashboard() {
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("🧠", fontSize = 20.sp)
+                            Text("🧠", fontSize = 18.sp)
                         }
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
                                     text = "NeuralKey AI",
-                                    fontSize = 21.sp,
+                                    fontSize = 19.sp,
                                     fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Box(
                                     modifier = Modifier
@@ -288,34 +298,41 @@ fun CompanionDashboard() {
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "v1.2 • FREE",
+                                        text = "v1.2 FREE",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFC4B5FD)
+                                        color = Color(0xFFC4B5FD),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "100% Free • Adaptive Key Memory • Foldable Ready",
+                                text = "Private Key Memory • 32 AI Tools • Foldable Ready",
                                 fontSize = 11.sp,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xFF94A3B8),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
 
-                    // Animated Status Pill
+                    // Single-line Status Pill (measured first because it has no weight)
                     Row(
                         modifier = Modifier
+                            .testTag("ime_status_pill")
                             .clip(RoundedCornerShape(20.dp))
                             .background(statusColor.copy(alpha = 0.14f))
-                            .border(1.dp, statusColor.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                            .border(1.dp, statusColor.copy(alpha = 0.65f), RoundedCornerShape(20.dp))
+                            .clickable { selectedTab = 0 }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(8.dp)
+                                .size(7.dp)
                                 .scale(pulseScale)
                                 .clip(CircleShape)
                                 .background(statusColor)
@@ -324,7 +341,9 @@ fun CompanionDashboard() {
                             text = if (isReady) "Active IME" else "Setup Needed",
                             color = statusColor,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -364,15 +383,15 @@ fun CompanionDashboard() {
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                // Modern Animated Pill Tab Bar
+                // 5-Tab Bar: Icon + Single-line label on every tab so widths never jump or truncate
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Color(0xFF141622))
-                        .border(1.dp, Color(0xFF232738), RoundedCornerShape(16.dp))
+                        .border(1.dp, Color(0xFF232738), RoundedCornerShape(14.dp))
                         .padding(4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -380,44 +399,42 @@ fun CompanionDashboard() {
                         val selected = selectedTab == tab.index
                         val pillBg by animateColorAsState(
                             targetValue = if (selected) activeTheme.accentPrimary else Color.Transparent,
-                            animationSpec = tween(250),
+                            animationSpec = tween(220),
                             label = "tabBg"
                         )
                         val contentCol by animateColorAsState(
-                            targetValue = if (selected) {
-                                if (activeTheme.isDark) Color(0xFF090A0F) else Color.White
-                            } else Color(0xFF94A3B8),
-                            animationSpec = tween(250),
+                            targetValue = if (selected) onAccentColor(activeTheme.accentPrimary) else Color(0xFF94A3B8),
+                            animationSpec = tween(220),
                             label = "tabText"
                         )
 
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
+                                .testTag("dashboard_tab_${tab.index}")
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(pillBg)
                                 .clickable { selectedTab = tab.index }
-                                .padding(vertical = 8.dp, horizontal = 4.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(vertical = 7.dp, horizontal = 2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Icon(
                                 imageVector = tab.icon,
                                 contentDescription = tab.label,
                                 tint = contentCol,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            if (selected) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = tab.label,
-                                    color = contentCol,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            Text(
+                                text = tab.label,
+                                color = contentCol,
+                                fontSize = 11.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -492,7 +509,7 @@ private fun TelemetryMiniChip(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF151824))
-            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+            .border(1.dp, accent.copy(alpha = 0.38f), RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 5.dp)
     ) {
@@ -501,7 +518,8 @@ private fun TelemetryMiniChip(
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color(0xFFE2E8F0),
-            maxLines = 1
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -528,15 +546,16 @@ private fun SetupAndApiTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Step-by-step IME Activation Wizard
         item {
             GlassCard {
                 Text(
                     text = "🚀 Instant Activation Wizard",
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -544,10 +563,11 @@ private fun SetupAndApiTab(
                 Text(
                     text = "Complete these two quick steps to unlock NeuralKey AI across WhatsApp, Gmail, Slack, and all your apps.",
                     fontSize = 12.sp,
+                    lineHeight = 17.sp,
                     color = Color(0xFF94A3B8)
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 WizardStepItem(
                     stepNumber = 1,
@@ -583,10 +603,14 @@ private fun SetupAndApiTab(
             GlassCard {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Key,
                             contentDescription = null,
@@ -598,7 +622,9 @@ private fun SetupAndApiTab(
                             text = "OpenRouter API Vault",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -607,13 +633,15 @@ private fun SetupAndApiTab(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color(0xFF10B981).copy(alpha = 0.15f))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "🔒 AES-256-GCM Encrypted",
+                                text = "🔒 AES-256",
                                 color = Color(0xFF34D399),
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -623,6 +651,7 @@ private fun SetupAndApiTab(
                 Text(
                     text = "100% Free Tier Supported! Generate a free key at openrouter.ai/keys to stream 300+ models directly without middleman servers.",
                     fontSize = 12.sp,
+                    lineHeight = 17.sp,
                     color = Color(0xFF94A3B8)
                 )
 
@@ -631,8 +660,8 @@ private fun SetupAndApiTab(
                 OutlinedTextField(
                     value = apiKeyInput,
                     onValueChange = { apiKeyInput = it },
-                    label = { Text("sk-or-v1-...") },
-                    placeholder = { Text("Paste your OpenRouter API key") },
+                    label = { Text("sk-or-v1-...", fontSize = 12.sp) },
+                    placeholder = { Text("Paste your OpenRouter API key", fontSize = 13.sp) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -647,7 +676,8 @@ private fun SetupAndApiTab(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(
                         onClick = {
@@ -658,12 +688,16 @@ private fun SetupAndApiTab(
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(
                             text = "Save Key",
-                            color = Color(0xFF090A0F),
-                            fontWeight = FontWeight.Bold
+                            color = onAccentColor(accentColor),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
@@ -683,12 +717,20 @@ private fun SetupAndApiTab(
                             }
                         },
                         enabled = !isCheckingKey,
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         if (isCheckingKey) {
                             CircularProgressIndicator(color = accentColor, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                         } else {
-                            Text("Verify Key", color = Color.White)
+                            Text(
+                                text = "Verify Key",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
 
@@ -765,11 +807,11 @@ private fun SetupAndApiTab(
                 Text(
                     text = "Tap below to summon NeuralKey and test Adaptive Key Memory, Next-Word Predictions, One-Handed Mode, and Email AI tools.",
                     fontSize = 12.sp,
+                    lineHeight = 17.sp,
                     color = Color(0xFF94A3B8)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Quick sample draft pills
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -786,9 +828,16 @@ private fun SetupAndApiTab(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color(0xFF1E2235))
                                 .clickable { testDraftText = sample }
-                                .padding(horizontal = 8.dp, vertical = 5.dp)
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
-                            Text(label, fontSize = 11.sp, color = Color(0xFFCBD5E1))
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFFCBD5E1),
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -798,7 +847,7 @@ private fun SetupAndApiTab(
                 OutlinedTextField(
                     value = testDraftText,
                     onValueChange = { testDraftText = it },
-                    placeholder = { Text("Tap here to test typing, spacebar trackpad, or ✨ AI Studio...") },
+                    placeholder = { Text("Tap here to test typing, spacebar trackpad, or ✨ AI Studio...", fontSize = 13.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -843,27 +892,35 @@ private fun SmartTypingAndPostureTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // 1. Adaptive Key Memory & Next-Word Intelligence Card
         item {
             GlassCard {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 10.dp)
+                    ) {
                         Text(
-                            text = "🧠 Adaptive Key Memory Engine",
-                            fontSize = 17.sp,
+                            text = "🧠 Adaptive Key Memory",
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "100% offline personal vocabulary & bigram next-word learning",
                             fontSize = 12.sp,
+                            lineHeight = 16.sp,
                             color = Color(0xFF94A3B8)
                         )
                     }
@@ -878,7 +935,9 @@ private fun SmartTypingAndPostureTab(
                             text = "$learnedCount Learned",
                             color = accentColor,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -928,7 +987,7 @@ private fun SmartTypingAndPostureTab(
                     OutlinedTextField(
                         value = customWordInput,
                         onValueChange = { customWordInput = it },
-                        placeholder = { Text("Teach custom word or name (e.g. NeuralKey)") },
+                        placeholder = { Text("Teach custom word (e.g. NeuralKey)", fontSize = 12.sp) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -946,11 +1005,19 @@ private fun SmartTypingAndPostureTab(
                                 customWordInput = ""
                             }
                         },
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = accentColor)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF090A0F), modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Add, contentDescription = null, tint = onAccentColor(accentColor), modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Teach", color = Color(0xFF090A0F), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(
+                            text = "Teach",
+                            color = onAccentColor(accentColor),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
                     }
                 }
 
@@ -973,6 +1040,8 @@ private fun SmartTypingAndPostureTab(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFFF87171),
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.clickable {
                                     app.clearKeyMemory()
                                     Toast.makeText(context, "Cleared learned Key Memory", Toast.LENGTH_SHORT).show()
@@ -995,7 +1064,9 @@ private fun SmartTypingAndPostureTab(
                                     Text(
                                         text = "$word ×$count",
                                         fontSize = 11.sp,
-                                        color = Color(0xFFE2E8F0)
+                                        color = Color(0xFFE2E8F0),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                             }
@@ -1009,8 +1080,8 @@ private fun SmartTypingAndPostureTab(
         item {
             GlassCard {
                 Text(
-                    text = "📱 One-Handed & Foldable Posture Studio",
-                    fontSize = 17.sp,
+                    text = "📱 One-Handed & Foldable Posture",
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -1018,6 +1089,7 @@ private fun SmartTypingAndPostureTab(
                 Text(
                     text = "Engineered for standard phones, Galaxy Z Flip cover screens, and Galaxy Z Fold / Pixel Pro Fold unfolded inner displays.",
                     fontSize = 12.sp,
+                    lineHeight = 17.sp,
                     color = Color(0xFF94A3B8)
                 )
 
@@ -1036,9 +1108,9 @@ private fun SmartTypingAndPostureTab(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
-                        Triple(OneHandedMode.LEFT, "◀ Left Hand", "Dock 82% Left"),
-                        Triple(OneHandedMode.OFF, "⤢ Full Width", "Standard 100%"),
-                        Triple(OneHandedMode.RIGHT, "Right Hand ▶", "Dock 82% Right")
+                        Triple(OneHandedMode.LEFT, "◀ Left", "82% Left"),
+                        Triple(OneHandedMode.OFF, "⤢ Full", "100% Width"),
+                        Triple(OneHandedMode.RIGHT, "Right ▶", "82% Right")
                     ).forEach { (mode, label, subtitle) ->
                         val selected = oneHandedMode == mode
                         val borderCol by animateColorAsState(
@@ -1058,20 +1130,24 @@ private fun SmartTypingAndPostureTab(
                                 .clickable {
                                     scope.launch { preferences.setOneHandedMode(mode) }
                                 }
-                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                                .padding(vertical = 10.dp, horizontal = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 text = label,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (selected) accentColor else Color.White
+                                color = if (selected) accentColor else Color.White,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = subtitle,
                                 fontSize = 10.sp,
-                                color = Color(0xFF94A3B8)
+                                color = Color(0xFF94A3B8),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -1179,15 +1255,16 @@ private fun AIStudioPromptsTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // 1. Create Custom Email / Productivity AI Action
         item {
             GlassCard {
                 Text(
                     text = "✨ Create Custom AI Action",
-                    fontSize = 17.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -1195,6 +1272,7 @@ private fun AIStudioPromptsTab(
                 Text(
                     text = "Build your own 1-tap Email template, code reviewer, or tone rewriter for the in-keyboard AI Studio.",
                     fontSize = 12.sp,
+                    lineHeight = 17.sp,
                     color = Color(0xFF94A3B8)
                 )
 
@@ -1203,7 +1281,7 @@ private fun AIStudioPromptsTab(
                 OutlinedTextField(
                     value = newTitle,
                     onValueChange = { newTitle = it },
-                    label = { Text("Action Title (e.g. 'Weekly Status Email')") },
+                    label = { Text("Action Title (e.g. 'Weekly Status Email')", fontSize = 12.sp) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1237,7 +1315,7 @@ private fun AIStudioPromptsTab(
                 OutlinedTextField(
                     value = newInstruction,
                     onValueChange = { newInstruction = it },
-                    label = { Text("Prompt Instruction (what should the AI do with your draft?)") },
+                    label = { Text("Prompt Instruction (what should AI do?)", fontSize = 12.sp) },
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1268,9 +1346,16 @@ private fun AIStudioPromptsTab(
                     colors = ButtonDefaults.buttonColors(containerColor = accentColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = Color(0xFF090A0F), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Add, contentDescription = null, tint = onAccentColor(accentColor), modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Save Custom AI Tool", color = Color(0xFF090A0F), fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Save Custom AI Tool",
+                        color = onAccentColor(accentColor),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
@@ -1278,7 +1363,10 @@ private fun AIStudioPromptsTab(
         // 2. Global AI Directives Card
         item {
             GlassCard {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
                     Icon(Icons.Default.Tune, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
                     Text(
                         text = "Global AI System Directives",
@@ -1291,13 +1379,14 @@ private fun AIStudioPromptsTab(
                 Text(
                     text = "Persistent rules automatically appended to every AI request (e.g., 'Sign emails as Best, Mayur', 'Use British English').",
                     fontSize = 12.sp,
+                    lineHeight = 17.sp,
                     color = Color(0xFF94A3B8)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = directiveInput,
                     onValueChange = { directiveInput = it },
-                    placeholder = { Text("Enter global rules for all AI actions...") },
+                    placeholder = { Text("Enter global rules for all AI actions...", fontSize = 13.sp) },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1317,7 +1406,14 @@ private fun AIStudioPromptsTab(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF23283C))
                 ) {
-                    Text("Save Global Directives", color = Color.White, fontSize = 12.sp)
+                    Text(
+                        text = "Save Global Directives",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
@@ -1330,7 +1426,7 @@ private fun AIStudioPromptsTab(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF94A3B8),
-                    letterSpacing = 1.sp
+                    letterSpacing = 0.8.sp
                 )
                 Row(
                     modifier = Modifier
@@ -1354,10 +1450,13 @@ private fun AIStudioPromptsTab(
             GlassCard {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1366,7 +1465,10 @@ private fun AIStudioPromptsTab(
                                 text = prompt.title,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
                             Box(
                                 modifier = Modifier
@@ -1378,7 +1480,9 @@ private fun AIStudioPromptsTab(
                                     text = prompt.category,
                                     fontSize = 10.sp,
                                     color = accentColor,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -1386,6 +1490,7 @@ private fun AIStudioPromptsTab(
                         Text(
                             text = prompt.promptInstruction,
                             fontSize = 12.sp,
+                            lineHeight = 16.sp,
                             color = Color(0xFF94A3B8),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -1427,9 +1532,9 @@ private fun ModelExplorerTab(
     val filteredModels = remember(allModels, searchQuery, freeOnlyFilter, pinnedOnlyFilter) {
         allModels.filter { model ->
             val matchesQuery = searchQuery.isBlank() ||
-                    model.name.contains(searchQuery, ignoreCase = true) ||
-                    model.id.contains(searchQuery, ignoreCase = true) ||
-                    model.description.contains(searchQuery, ignoreCase = true)
+                model.name.contains(searchQuery, ignoreCase = true) ||
+                model.id.contains(searchQuery, ignoreCase = true) ||
+                model.description.contains(searchQuery, ignoreCase = true)
             val matchesFree = !freeOnlyFilter || model.isFree
             val matchesPinned = !pinnedOnlyFilter || pinnedIds.contains(model.id)
             matchesQuery && matchesFree && matchesPinned
@@ -1439,26 +1544,34 @@ private fun ModelExplorerTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Sync & Search Header
+        // Sync & Search Header: Left Column uses weight(1f) so Sync Live button never wraps vertically
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 10.dp)
+            ) {
                 Text(
                     text = "OpenRouter Model Catalog",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${allModels.size} models cached • FTS4 Instant Search",
+                    text = "${allModels.size} models cached • Instant Search",
                     fontSize = 11.sp,
-                    color = Color(0xFF94A3B8)
+                    color = Color(0xFF94A3B8),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -1476,14 +1589,31 @@ private fun ModelExplorerTab(
                     }
                 },
                 enabled = !isSyncing,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = accentColor)
             ) {
                 if (isSyncing) {
-                    CircularProgressIndicator(color = Color(0xFF090A0F), strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                    CircularProgressIndicator(
+                        color = onAccentColor(accentColor),
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(14.dp)
+                    )
                 } else {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF090A0F))
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = onAccentColor(accentColor)
+                    )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Sync Live", fontSize = 11.sp, color = Color(0xFF090A0F), fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Sync Live",
+                        fontSize = 12.sp,
+                        color = onAccentColor(accentColor),
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
@@ -1492,7 +1622,7 @@ private fun ModelExplorerTab(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search 300+ models (Gemini, Llama 3.3, Claude, DeepSeek)...") },
+            placeholder = { Text("Search 300+ models (Gemini, Llama, Claude)...", fontSize = 13.sp) },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color(0xFF94A3B8)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -1576,13 +1706,19 @@ private fun ModelCard(
             .fillMaxWidth()
             .border(if (isActive) 1.5.dp else 1.dp, borderColor, RoundedCornerShape(16.dp))
     ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
                     Text(
                         text = model.name,
                         fontSize = 15.sp,
@@ -1614,16 +1750,30 @@ private fun ModelCard(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(accentColor)
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
                         ) {
-                            Text("ACTIVE", color = Color(0xFF090A0F), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = "ACTIVE",
+                                color = onAccentColor(accentColor),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     } else {
                         Button(
                             onClick = onSelect,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF232738))
                         ) {
-                            Text("Select", fontSize = 11.sp, color = Color(0xFFE2E8F0))
+                            Text(
+                                text = "Select",
+                                fontSize = 11.sp,
+                                color = Color(0xFFE2E8F0),
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -1633,13 +1783,13 @@ private fun ModelCard(
                 Text(
                     text = model.description,
                     fontSize = 12.sp,
+                    lineHeight = 16.sp,
                     color = Color(0xFF94A3B8),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // Specs badges
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -1654,7 +1804,9 @@ private fun ModelCard(
                         text = if (model.isFree) "FREE ($0.00)" else model.formattedCost,
                         color = if (model.isFree) Color(0xFF34D399) else Color(0xFFCBD5E1),
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -1667,7 +1819,9 @@ private fun ModelCard(
                     Text(
                         text = "Context: ${model.formattedContextLength}",
                         color = Color(0xFF94A3B8),
-                        fontSize = 10.sp
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -1680,7 +1834,9 @@ private fun ModelCard(
                     Text(
                         text = model.modality,
                         color = Color(0xFF94A3B8),
-                        fontSize = 10.sp
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -1700,7 +1856,7 @@ private fun FilterChip(
         label = "chipBg"
     )
     val textCol by animateColorAsState(
-        targetValue = if (isSelected) Color(0xFF090A0F) else Color(0xFFCBD5E1),
+        targetValue = if (isSelected) onAccentColor(accentColor) else Color(0xFFCBD5E1),
         label = "chipText"
     )
     Box(
@@ -1715,7 +1871,9 @@ private fun FilterChip(
             text = label,
             fontSize = 12.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = textCol
+            color = textCol,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -1751,28 +1909,37 @@ private fun ThemesTab(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Header & Interactive Animated Live Preview Card
         item {
             GlassCard {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 10.dp)
+                    ) {
                         Text(
                             text = "🎨 15 Flagship Themes",
-                            fontSize = 17.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Tap any key below to test live theme physics",
                             fontSize = 12.sp,
-                            color = Color(0xFF94A3B8)
+                            color = Color(0xFF94A3B8),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -1781,13 +1948,15 @@ private fun ThemesTab(
                             .clip(RoundedCornerShape(10.dp))
                             .background(activeTheme.accentPrimary.copy(alpha = 0.2f))
                             .border(1.dp, activeTheme.accentPrimary, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
                             text = "${activeTheme.emoji} ${activeTheme.name}",
                             color = activeTheme.accentPrimary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -1811,10 +1980,12 @@ private fun ThemesTab(
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(activeTheme.commandBarBg)
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(end = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
@@ -1823,7 +1994,10 @@ private fun ThemesTab(
                                     text = "AI Studio • 32 Tools",
                                     color = activeTheme.accentPrimary,
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                             Box(
@@ -1836,7 +2010,9 @@ private fun ThemesTab(
                                     text = "Key Memory Active",
                                     color = activeTheme.accentSecondary,
                                     fontSize = 9.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -1865,7 +2041,7 @@ private fun ThemesTab(
                                 ) {
                                     Text(
                                         text = char,
-                                        color = if (pressed) Color.Black else activeTheme.keyTextColor,
+                                        color = if (pressed) onAccentColor(activeTheme.accentPrimary) else activeTheme.keyTextColor,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -1893,7 +2069,7 @@ private fun ThemesTab(
                                 ) {
                                     Text(
                                         text = char,
-                                        color = if (pressed) Color.Black else activeTheme.keyTextColor,
+                                        color = if (pressed) onAccentColor(activeTheme.accentPrimary) else activeTheme.keyTextColor,
                                         fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold
                                     )
@@ -1901,7 +2077,7 @@ private fun ThemesTab(
                             }
                         }
 
-                        // Mock Row 4 (?123, globe, spacebar, enter)
+                        // Mock Row 4 (?123, spacebar, enter)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -1928,7 +2104,9 @@ private fun ThemesTab(
                                     text = "⚡ ${activeTheme.name}",
                                     color = activeTheme.accentPrimary,
                                     fontSize = 9.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                             Box(
@@ -1941,7 +2119,7 @@ private fun ThemesTab(
                             ) {
                                 Text(
                                     text = "↵",
-                                    color = if (activeTheme.isDark) Color.Black else Color.White,
+                                    color = onAccentColor(activeTheme.accentPrimary),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -2006,25 +2184,31 @@ private fun ThemesTab(
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(text = theme.emoji, fontSize = 24.sp)
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = theme.name,
-                                    fontSize = 16.sp,
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = if (theme.isDark) "Dark / AMOLED Surface" else "Daylight Studio Surface",
                                     fontSize = 11.sp,
-                                    color = Color(0xFF94A3B8)
+                                    color = Color(0xFF94A3B8),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -2038,9 +2222,11 @@ private fun ThemesTab(
                             ) {
                                 Text(
                                     text = "ACTIVE",
-                                    color = if (theme.isDark) Color.Black else Color.White,
+                                    color = onAccentColor(theme.accentPrimary),
                                     fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         } else {
@@ -2051,9 +2237,16 @@ private fun ThemesTab(
                                         Toast.makeText(context, "${theme.emoji} Applied ${theme.name}", Toast.LENGTH_SHORT).show()
                                     }
                                 },
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Text("Apply", fontSize = 12.sp, color = Color.White)
+                                Text(
+                                    text = "Apply",
+                                    fontSize = 12.sp,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
                             }
                         }
                     }
@@ -2074,7 +2267,9 @@ private fun ThemesTab(
                             text = "Palette:",
                             fontSize = 11.sp,
                             color = Color(0xFF64748B),
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                         ColorSwatch(color = theme.accentPrimary)
                         ColorSwatch(color = theme.accentSecondary)
@@ -2119,15 +2314,30 @@ private fun ModernToggleRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(text = title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Text(text = subtitle, color = Color(0xFF94A3B8), fontSize = 11.sp, lineHeight = 15.sp)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp)
+        ) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                color = Color(0xFF94A3B8),
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
         }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color(0xFF090A0F),
+                checkedThumbColor = onAccentColor(accentColor),
                 checkedTrackColor = accentColor
             )
         )
@@ -2158,11 +2368,12 @@ private fun WizardStepItem(
                 RoundedCornerShape(14.dp)
             )
             .padding(12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -2183,18 +2394,27 @@ private fun WizardStepItem(
             Text(
                 text = title,
                 fontSize = 13.sp,
+                lineHeight = 17.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isCompleted) Color(0xFFCBD5E1) else Color.White
+                color = if (isCompleted) Color(0xFFCBD5E1) else Color.White,
+                modifier = Modifier.weight(1f)
             )
         }
 
         if (!isCompleted) {
             Button(
                 onClick = onAction,
-                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                modifier = Modifier.padding(start = 8.dp)
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accentColor)
             ) {
-                Text(text = actionLabel, fontSize = 11.sp, color = Color(0xFF090A0F), fontWeight = FontWeight.Bold)
+                Text(
+                    text = actionLabel,
+                    fontSize = 12.sp,
+                    color = onAccentColor(accentColor),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
         }
     }
