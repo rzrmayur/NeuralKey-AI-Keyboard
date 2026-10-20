@@ -40,7 +40,7 @@ class KeyboardLayoutTest {
         for (mode in listOf(KeyboardMode.AIMenuMode("hello"), KeyboardMode.ModelPickerMode(),
             KeyboardMode.AIStreamingMode("hello", "world", false))) {
             compose.runOnIdle { state.value = state.value.copy(mode = mode) }
-            assertEquals(root.height.value, compose.onNodeWithTag("root").getUnclippedBoundsInRoot().height.value, 0.1f)
+            assertEquals((root.bottom - root.top).value, compose.onNodeWithTag("root").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }, 0.1f)
         }
     }
 
@@ -69,7 +69,7 @@ class KeyboardLayoutTest {
         val enter = compose.onNodeWithContentDescription("Enter").getUnclippedBoundsInRoot()
         assertTrue(switch.left - root.left >= 48.dp)
         assertTrue(root.right - enter.right >= 24.dp)
-        assertTrue(root.height < 260.dp)
+        assertTrue(root.bottom - root.top < 260.dp)
     }
 
     @Test fun cancelledCharacterTouchDoesNotCommit() {
