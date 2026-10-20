@@ -12,7 +12,7 @@ import androidx.security.crypto.MasterKey
  */
 class SecureKeyStorage(private val context: Context) {
 
-    private val prefs: SharedPreferences by lazy {
+    private val prefs: SharedPreferences? by lazy {
         try {
             val masterKey = MasterKey.Builder(context)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -26,26 +26,28 @@ class SecureKeyStorage(private val context: Context) {
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize EncryptedSharedPreferences, falling back to secure fallback", e)
-            context.getSharedPreferences(FALLBACK_PREFS_NAME, Context.MODE_PRIVATE)
+            Log.e(TAG, "Encrypted key storage unavailable", e)
+            null // Fail closed; never save an API key in plaintext.
         }
     }
 
     fun getApiKey(): String? {
-        val key = prefs.getString(KEY_OPENROUTER_API_KEY, null)?.trim()
+        val key = prefs?.getString(KEY_OPENROUTER_API_KEY, null)?.trim()
         return if (key.isNullOrBlank()) null else key
     }
 
     fun saveApiKey(apiKey: String) {
-        prefs.edit()
+        val encrypted = checkNotNull(prefs) { "Secure storage is unavailable. Restart the device and try again." }
+        encrypted.edit()
             .putString(KEY_OPENROUTER_API_KEY, apiKey.trim())
             .apply()
     }
 
     fun clearApiKey() {
-        prefs.edit()
-            .remove(KEY_OPENROUTER_API_KEY)
-            .apply()
+        prefs?.edit()
+            ?.remove(KEY_OPENROUTER_API_KEY)
+            ?.apply()
+        context.getSharedPreferences(FALLBACK_PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()
     }
 
     fun hasApiKey(): Boolean {

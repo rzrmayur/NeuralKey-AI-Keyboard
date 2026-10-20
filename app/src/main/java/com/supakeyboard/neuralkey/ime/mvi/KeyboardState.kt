@@ -67,6 +67,8 @@ sealed interface KeyboardIntent {
     data class KeyPress(val char: String) : KeyboardIntent
     data class KeyCodePress(val primaryCode: Int) : KeyboardIntent
     data class TextCommit(val text: String) : KeyboardIntent
+    data class SelectSuggestion(val word: String) : KeyboardIntent
+    object HideKeyboard : KeyboardIntent
     object DeleteBackwards : KeyboardIntent
     data class AcceleratedDelete(val isWordMode: Boolean) : KeyboardIntent
     data class MoveCursor(val steps: Int) : KeyboardIntent
@@ -111,5 +113,9 @@ data class KeyboardUiState(
     val hapticIntensity: Int = 70,
     val freeModelsOnly: Boolean = false,
     val currentTheme: com.supakeyboard.neuralkey.ime.theme.KeyboardTheme = com.supakeyboard.neuralkey.ime.theme.KeyboardThemes.CYBERPUNK_NEON,
+    val suggestions: List<String> = emptyList(),
+    val suggestionsEnabled: Boolean = true,
+    val autoCorrectionEnabled: Boolean = true,
+    val isSensitiveField: Boolean = false,
     val errorMessage: String? = null
 )

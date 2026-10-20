@@ -51,6 +51,12 @@ class KeyboardPreferences(private val context: Context) {
         preferences[KEY_FREE_MODELS_ONLY] ?: false
     }
 
+    val suggestionsEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_SUGGESTIONS] ?: true }
+    val autoCorrectionEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_AUTO_CORRECTION] ?: true }
+
+    suspend fun setSuggestionsEnabled(enabled: Boolean) { dataStore.edit { it[KEY_SUGGESTIONS] = enabled } }
+    suspend fun setAutoCorrectionEnabled(enabled: Boolean) { dataStore.edit { it[KEY_AUTO_CORRECTION] = enabled } }
+
     val selectedTheme: Flow<String> = dataStore.data.map { preferences ->
         preferences[KEY_THEME] ?: "SYSTEM"
     }
@@ -126,6 +132,8 @@ class KeyboardPreferences(private val context: Context) {
     }
 
     companion object {
+        private val KEY_SUGGESTIONS = booleanPreferencesKey("suggestions_enabled")
+        private val KEY_AUTO_CORRECTION = booleanPreferencesKey("auto_correction_enabled")
         const val DEFAULT_ACTIVE_MODEL = "google/gemini-2.5-flash"
         val DEFAULT_PINNED_MODELS = setOf(
             "google/gemini-2.5-flash",

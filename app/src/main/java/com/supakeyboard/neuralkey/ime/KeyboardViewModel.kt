@@ -11,6 +11,7 @@ import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
 import com.supakeyboard.neuralkey.ime.theme.KeyboardThemes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,12 +41,21 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
 
     private var streamingJob: Job? = null
 
-    private val perAppStates = mutableMapOf<String, KeyboardUiState>()
 
     init {
         val repo = repository
         val prefs = preferences
         if (repo != null && prefs != null) {
+            viewModelScope.launch {
+                prefs.suggestionsEnabled.collect { enabled ->
+                    _uiState.update { it.copy(suggestionsEnabled = enabled, suggestions = if (enabled) it.suggestions else emptyList()) }
+                }
+            }
+            viewModelScope.launch {
+                prefs.autoCorrectionEnabled.collect { enabled ->
+                    _uiState.update { it.copy(autoCorrectionEnabled = enabled) }
+                }
+            }
             // Use individual launch/collect for robustness — avoids fragile chained combine
             viewModelScope.launch {
                 repo.activeModel.collect { model ->
@@ -112,32 +122,33 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun onAppSwitch(targetPackage: String?) {
-        val pkg = targetPackage ?: "unknown"
-        // Save current state for the previous app
-        val currentPkg = _uiState.value.targetPackageName ?: "unknown"
-        perAppStates[currentPkg] = _uiState.value.copy()
-
-        // Restore state for the new app, or use default
-        val restoredState = perAppStates[pkg] ?: KeyboardUiState()
+        // Editor content and AI requests must never survive a focus/app change.
+        cancelAIStreaming()
         _uiState.update {
-            restoredState.copy(
-                targetPackageName = targetPackage,
-                activeModel = _uiState.value.activeModel,
-                pinnedModels = _uiState.value.pinnedModels,
-                availableModels = _uiState.value.availableModels,
-                userPrompts = _uiState.value.userPrompts,
-                hapticEnabled = _uiState.value.hapticEnabled,
-                hapticIntensity = _uiState.value.hapticIntensity,
-                freeModelsOnly = _uiState.value.freeModelsOnly,
-                currentTheme = _uiState.value.currentTheme
-            )
+            it.copy(targetPackageName = targetPackage, currentDraft = "", suggestions = emptyList(),
+                isShifted = false, isCapsLocked = false, isSymbols = false, isSymbolsPage2 = false)
         }
+    }
+
+    fun updateSuggestions(words: List<String>) { _uiState.update { it.copy(suggestions = words) } }
+    fun setSensitiveField(sensitive: Boolean) { _uiState.update { it.copy(isSensitiveField = sensitive) } }
+    fun characterTyped() {
+        _uiState.update { if (it.isCapsLocked) it else it.copy(isShifted = false) }
     }
 
     // ── State-mutating intent handlers ──────────────────────────────
 
+    private var lastShiftTap = 0L
     fun toggleShift() {
-        _uiState.update { it.copy(isShifted = !it.isShifted) }
+        val now = android.os.SystemClock.uptimeMillis()
+        _uiState.update {
+            when {
+                it.isCapsLocked -> it.copy(isShifted = false, isCapsLocked = false)
+                it.isShifted && now - lastShiftTap < 350 -> it.copy(isShifted = true, isCapsLocked = true)
+                else -> it.copy(isShifted = !it.isShifted, isCapsLocked = false)
+            }
+        }
+        lastShiftTap = now
     }
 
     fun toggleSymbols() {
@@ -267,6 +278,8 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                         state.copy(mode = currentStream.copy(isStreaming = false))
                     } else state
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "AI Streaming error", e)
                 _uiState.update { state ->

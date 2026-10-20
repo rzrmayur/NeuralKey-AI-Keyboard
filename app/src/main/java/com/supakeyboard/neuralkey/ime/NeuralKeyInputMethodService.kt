@@ -1,34 +1,35 @@
 package com.supakeyboard.neuralkey.ime
 
-import android.os.Build
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import com.supakeyboard.neuralkey.NeuralKeyApplication
 import com.supakeyboard.neuralkey.ime.lifecycle.LifecycleInputMethodService
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
+import com.supakeyboard.neuralkey.ime.typing.InputFieldPolicy
+import com.supakeyboard.neuralkey.ime.typing.TypingController
+import com.supakeyboard.neuralkey.ime.typing.TypingEditor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Core NeuralKey Input Method Service.
@@ -45,14 +46,33 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
     }
     val uiState: StateFlow<KeyboardUiState> get() = viewModel.uiState
 
+    private val typing = TypingController { (application as NeuralKeyApplication).suggestionEngine }
+    private var suggestionJob: Job? = null
+    private var inputActive = false
+
+    private class ConnectionEditor(private val ic: InputConnection) : TypingEditor {
+        override fun beforeCursor(limit: Int) = ic.getTextBeforeCursor(limit, 0)?.toString().orEmpty()
+        override fun afterCursor(limit: Int) = ic.getTextAfterCursor(limit, 0)?.toString().orEmpty()
+        override fun hasSelection() = !ic.getSelectedText(0).isNullOrEmpty()
+        override fun commit(text: String) { ic.commitText(text, 1) }
+        override fun deleteBefore(length: Int) { ic.deleteSurroundingText(length, 0) }
+        override fun deleteSelection() { ic.commitText("", 1) }
+        override fun batch(block: () -> Unit) {
+            ic.beginBatchEdit()
+            try { block() } finally { ic.endBatchEdit() }
+        }
+    }
+
+    // Keep the host editor visible in landscape and split-screen as well.
+    override fun onEvaluateFullscreenMode() = false
+
     override fun onCreateInputView(): View {
         return try {
             ComposeView(this).apply {
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 attachViewTreeOwners(this)
                 setViewCompositionStrategy(
-                    ViewCompositionStrategy.DisposeOnLifecycleDestroyed(
-                        this@NeuralKeyInputMethodService
-                    )
+                    ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool
                 )
                 setContent {
                     MaterialTheme(
@@ -93,24 +113,41 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         }
     }
 
-    override fun onComputeInsets(outInsets: Insets) {
-        super.onComputeInsets(outInsets)
-        // Make the whole keyboard frame touchable so taps on the bottom row
-        // (space, globe, enter) reach our views instead of being dropped.
-        outInsets.contentTopInsets = outInsets.visibleTopInsets
-        outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_FRAME
+    // Preserve InputMethodService's touch region; the system navigation controls
+    // must not become part of the keyboard's touchable frame.
+    override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
+        super.onStartInput(info, restarting)
+        inputActive = true
+        typing.reset()
+        suggestionJob?.cancel()
+        viewModel.onAppSwitch(info?.packageName)
+        viewModel.updateInputContext(info?.packageName, info)
+        viewModel.updateInputType(info?.inputType ?: 0)
+        viewModel.setSensitiveField(InputFieldPolicy.isSensitive(info?.inputType ?: 0))
+        updateDraftAfterEdit()
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        if (info == null) return
+        updateDraftAfterEdit()
+    }
 
-        viewModel.onAppSwitch(info.packageName)
-        viewModel.updateInputContext(info.packageName, info)
-        viewModel.updateInputType(info.inputType)
+    override fun onFinishInputView(finishingInput: Boolean) {
+        suggestionJob?.cancel()
+        typing.reset()
+        viewModel.cancelAIStreaming()
+        viewModel.updateSuggestions(emptyList())
+        super.onFinishInputView(finishingInput)
+    }
 
-        val draft = extractCurrentDraft()
-        viewModel.updateDraft(draft)
+    override fun onFinishInput() {
+        inputActive = false
+        suggestionJob?.cancel()
+        typing.reset()
+        viewModel.cancelAIStreaming()
+        viewModel.updateDraft("")
+        viewModel.updateSuggestions(emptyList())
+        super.onFinishInput()
     }
 
     override fun onUpdateSelection(
@@ -119,34 +156,21 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         candidatesStart: Int, candidatesEnd: Int
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
-        // Real-time draft extraction when selection changes
-        val ic = currentInputConnection ?: return
-        val draft = try {
-            val selected = ic.getSelectedText(0)?.toString()
-            if (!selected.isNullOrBlank()) selected
-            else ic.getTextBeforeCursor(MAX_DRAFT_LENGTH, 0)?.toString() ?: ""
-        } catch (e: Exception) {
-            ""
-        }
-        viewModel.updateDraft(draft)
+        currentInputConnection?.let { typing.selectionChanged(ConnectionEditor(it)) }
+        updateDraftAfterEdit()
     }
 
     /**
      * Extracts the user's current draft from the active InputConnection.
-     * Prioritizes selected text, then falls back to extracted text or text before cursor.
+     * Uses selected text or a bounded prefix before the cursor, matching replacement scope.
      */
     fun extractCurrentDraft(): String {
+        if (viewModel.uiState.value.isSensitiveField) return ""
         val ic = currentInputConnection ?: return ""
-        val selected = ic.getSelectedText(0)?.toString()
-        if (!selected.isNullOrBlank()) {
-            return selected
-        }
-        val extracted = ic.getExtractedText(ExtractedTextRequest(), 0)?.text?.toString()
-        if (!extracted.isNullOrBlank()) {
-            return extracted
-        }
-        val beforeCursor = ic.getTextBeforeCursor(1000, 0)?.toString()
-        return beforeCursor ?: ""
+        return try {
+            ic.getSelectedText(0)?.toString()?.takeIf { it.isNotEmpty() }
+                ?: ic.getTextBeforeCursor(MAX_DRAFT_LENGTH, 0)?.toString().orEmpty()
+        } catch (_: RuntimeException) { "" }
     }
 
     /**
@@ -155,33 +179,56 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
      * state mutations are delegated to [KeyboardViewModel].
      */
     fun processIntent(intent: KeyboardIntent) {
+        if (viewModel.uiState.value.isSensitiveField && (intent is KeyboardIntent.OpenAIMenu ||
+                intent is KeyboardIntent.TriggerAIAction || intent is KeyboardIntent.TriggerCustomPrompt)) return
         when (intent) {
             is KeyboardIntent.KeyPress -> {
-                currentInputConnection?.commitText(intent.char, 1)
+                currentInputConnection?.let {
+                    val state = viewModel.uiState.value
+                    typing.type(ConnectionEditor(it), intent.char,
+                        state.autoCorrectionEnabled && InputFieldPolicy.allowsSuggestions(state.inputType))
+                }
+                if (intent.char.any { it.isLetter() }) viewModel.characterTyped()
                 updateDraftAfterEdit()
             }
             is KeyboardIntent.KeyCodePress -> {
-                sendDownUpKeyEvents(intent.primaryCode)
+                typing.reset()
+                if (intent.primaryCode != KeyEvent.KEYCODE_ENTER || !sendDefaultEditorAction(true)) {
+                    sendDownUpKeyEvents(intent.primaryCode)
+                }
                 updateDraftAfterEdit()
             }
             is KeyboardIntent.TextCommit -> {
+                typing.reset()
                 currentInputConnection?.commitText(intent.text, 1)
                 updateDraftAfterEdit()
             }
             is KeyboardIntent.DeleteBackwards -> {
-                currentInputConnection?.deleteSurroundingText(1, 0)
+                currentInputConnection?.let { typing.backspace(ConnectionEditor(it)) }
                 updateDraftAfterEdit()
             }
             is KeyboardIntent.AcceleratedDelete -> {
                 if (intent.isWordMode) {
                     deleteWordBeforeCursor()
                 } else {
-                    currentInputConnection?.deleteSurroundingText(1, 0)
+                    currentInputConnection?.let { typing.backspace(ConnectionEditor(it)) }
                 }
                 updateDraftAfterEdit()
             }
+            is KeyboardIntent.SelectSuggestion -> {
+                val state = viewModel.uiState.value
+                if (state.suggestionsEnabled && InputFieldPolicy.allowsSuggestions(state.inputType)) {
+                    currentInputConnection?.let {
+                        typing.choose(ConnectionEditor(it), intent.word, state.suggestions)
+                    }
+                    updateDraftAfterEdit()
+                }
+            }
+            is KeyboardIntent.HideKeyboard -> requestHideSelf(0)
             is KeyboardIntent.MoveCursor -> {
+                typing.reset()
                 moveCursor(intent.steps)
+                updateDraftAfterEdit()
             }
             is KeyboardIntent.ToggleShift -> viewModel.toggleShift()
             is KeyboardIntent.ToggleSymbols -> viewModel.toggleSymbols()
@@ -202,6 +249,13 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             is KeyboardIntent.CommitAIResult -> {
                 val streamingState =
                     viewModel.uiState.value.mode as? KeyboardMode.AIStreamingMode ?: return
+                if (streamingState.isStreaming || streamingState.error != null || streamingState.streamedText.isBlank()) return
+                if (intent.action != com.supakeyboard.neuralkey.ime.mvi.AICommitAction.COPY_TO_CLIPBOARD &&
+                    extractCurrentDraft() != streamingState.originalText) {
+                    android.widget.Toast.makeText(this, "Text changed. Run the AI action again before applying it.", android.widget.Toast.LENGTH_LONG).show()
+                    viewModel.cancelAIStreaming()
+                    return
+                }
                 commitAIText(streamingState.streamedText, intent.action)
                 viewModel.commitAIResult()
             }
@@ -211,7 +265,12 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             is KeyboardIntent.SelectModel -> viewModel.selectModel(intent.modelId)
             is KeyboardIntent.UpdateModelSearch -> viewModel.updateModelSearch(intent.query)
             is KeyboardIntent.ToggleFreeModelsOnly -> viewModel.toggleFreeModelsOnly()
-            is KeyboardIntent.SwitchToNextIme -> switchToNextInputMethod(false)
+            is KeyboardIntent.SwitchToNextIme -> {
+                typing.reset()
+                if (!switchToNextInputMethod(false)) {
+                    (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).showInputMethodPicker()
+                }
+            }
             is KeyboardIntent.UpdateTargetContext ->
                 viewModel.updateTargetContext(intent.packageName, intent.imeAction)
             is KeyboardIntent.DraftChanged -> viewModel.draftChanged(intent.draftText)
@@ -223,6 +282,7 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         action: com.supakeyboard.neuralkey.ime.mvi.AICommitAction
     ) {
         val ic = currentInputConnection ?: return
+        typing.reset()
         when (action) {
             com.supakeyboard.neuralkey.ime.mvi.AICommitAction.REPLACE_DRAFT -> {
                 val selected = ic.getSelectedText(0)
@@ -250,6 +310,8 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
 
     private fun deleteWordBeforeCursor() {
         val ic = currentInputConnection ?: return
+        typing.reset()
+        if (!ic.getSelectedText(0).isNullOrEmpty()) { ic.commitText("", 1); return }
         val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
         if (textBefore.isEmpty()) return
 
@@ -269,15 +331,35 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
     private fun moveCursor(steps: Int) {
         val ic = currentInputConnection ?: return
         val extracted = ic.getExtractedText(ExtractedTextRequest(), 0) ?: return
-        val newSelectionStart =
-            (extracted.selectionStart + steps).coerceIn(0, extracted.text.length)
-        val newSelectionEnd =
-            (extracted.selectionEnd + steps).coerceIn(0, extracted.text.length)
-        ic.setSelection(newSelectionStart, newSelectionEnd)
+        val position = (extracted.selectionEnd + steps).coerceIn(0, extracted.text.length)
+        ic.setSelection(extracted.startOffset + position, extracted.startOffset + position)
     }
 
     private fun updateDraftAfterEdit() {
+        if (!inputActive) return
         viewModel.updateDraft(extractCurrentDraft())
+        refreshSuggestions()
+    }
+
+    private fun refreshSuggestions() {
+        suggestionJob?.cancel()
+        val state = viewModel.uiState.value
+        if (!inputActive || !state.suggestionsEnabled || !InputFieldPolicy.allowsSuggestions(state.inputType)) {
+            viewModel.updateSuggestions(emptyList())
+            return
+        }
+        val ic = currentInputConnection ?: return
+        val word = typing.currentWord(ConnectionEditor(ic))
+        if (word == null) { viewModel.updateSuggestions(emptyList()); return }
+        // Publish the literal word immediately; compute dictionary matches off the UI thread.
+        viewModel.updateSuggestions(listOf(word))
+        val engine = (application as NeuralKeyApplication).suggestionEngine ?: return
+        suggestionJob = lifecycleScope.launch {
+            val words = withContext(Dispatchers.Default) { engine.suggestions(word) }
+            val latest = viewModel.uiState.value
+            if (inputActive && latest.suggestionsEnabled && currentInputConnection === ic &&
+                typing.currentWord(ConnectionEditor(ic)) == word) viewModel.updateSuggestions(words)
+        }
     }
 
     companion object {

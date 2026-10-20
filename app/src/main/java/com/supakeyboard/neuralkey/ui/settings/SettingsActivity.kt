@@ -439,8 +439,9 @@ private fun SetupAndApiTab(
                         Button(
                             onClick = {
                                 if (apiKeyInput.isNotBlank()) {
-                                    secureKeyStorage.saveApiKey(apiKeyInput)
-                                    Toast.makeText(context, "API Key saved securely!", Toast.LENGTH_SHORT).show()
+                                    runCatching { secureKeyStorage.saveApiKey(apiKeyInput) }
+                                        .onSuccess { Toast.makeText(context, "API Key saved securely!", Toast.LENGTH_SHORT).show() }
+                                        .onFailure { keyCheckError = it.message ?: "Secure storage unavailable" }
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
@@ -1337,6 +1338,8 @@ private fun PreferencesTab(
 
     val hapticEnabled by preferences.hapticFeedbackEnabled.collectAsState(initial = true)
     val hapticIntensity by preferences.hapticIntensity.collectAsState(initial = 70)
+    val suggestionsEnabled by preferences.suggestionsEnabled.collectAsState(initial = true)
+    val autoCorrectionEnabled by preferences.autoCorrectionEnabled.collectAsState(initial = true)
     val soundEnabled by preferences.soundFeedbackEnabled.collectAsState(initial = false)
     val customPrompt by preferences.customSystemPrompt.collectAsState(initial = "")
 
@@ -1348,6 +1351,24 @@ private fun PreferencesTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF16161D)),
+                modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Typing assistance", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Offline English dictionary. Backspace immediately after a correction restores your word.",
+                        color = Color(0xFF94A3B8), fontSize = 12.sp)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Word suggestions", color = Color.White, modifier = Modifier.weight(1f))
+                        Switch(suggestionsEnabled, { enabled -> scope.launch { preferences.setSuggestionsEnabled(enabled) } })
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Autocorrect on space", color = Color.White, modifier = Modifier.weight(1f))
+                        Switch(autoCorrectionEnabled, { enabled -> scope.launch { preferences.setAutoCorrectionEnabled(enabled) } })
+                    }
+                }
+            }
+        }
         // Haptics Card
         item {
             Card(

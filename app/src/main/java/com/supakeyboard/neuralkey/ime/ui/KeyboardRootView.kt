@@ -10,11 +10,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.captionBar
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -27,23 +30,16 @@ import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
 import com.supakeyboard.neuralkey.ime.theme.createDynamicKeyboardTheme
 
-private const val DIAG_TAG = "NeuralKeyDiag"
 
 @Composable
 fun KeyboardRootView(
     uiState: KeyboardUiState,
     onIntent: (KeyboardIntent) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    systemInsets: WindowInsets? = null
 ) {
     val context = LocalContext.current
     val isSystemDark = isSystemInDarkTheme()
-
-    // DIAGNOSTIC: navigation bar inset as seen by the IME window (expected > 0 on gesture/3-button nav)
-    val density = LocalDensity.current
-    val navBarBottomPx = WindowInsets.navigationBars.getBottom(density)
-    LaunchedEffect(navBarBottomPx) {
-        Log.d(DIAG_TAG, "IME navBar.bottom=${navBarBottomPx}px (${navBarBottomPx / density.density}dp)")
-    }
 
     // Resolve dynamic theme at runtime when SYSTEM_DYNAMIC is selected
     val resolvedTheme = remember(uiState.currentTheme.id, isSystemDark) {
@@ -61,14 +57,19 @@ fun KeyboardRootView(
         configuration.screenHeightDp < 650 -> 225.dp
         else -> 248.dp
     }
-    val totalPanelHeight = keyboardContentHeight + 44.dp
+    val totalPanelHeight = keyboardContentHeight + 84.dp
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
-            .onSizeChanged { Log.d(DIAG_TAG, "IME root size: ${it.width}x${it.height}px") }
             .background(resolvedTheme.backgroundBrush)
+            // Consume only remaining system insets. Never use imePadding inside an IME.
+            // Caption bars include newer system keyboard-switch/hide controls.
+            .windowInsetsPadding(
+                (systemInsets ?: WindowInsets.navigationBars.union(WindowInsets.captionBar).union(WindowInsets.displayCutout))
+                    .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+            )
             .padding(bottom = 6.dp)
     ) {
         when (uiState.mode) {
@@ -79,6 +80,8 @@ fun KeyboardRootView(
                     theme = resolvedTheme,
                     onIntent = onIntent
                 )
+
+                SuggestionBar(uiState, resolvedTheme, onIntent)
 
                 // 2. Physical QWERTY / Symbols Key Grid
                 Box(

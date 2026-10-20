@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
@@ -34,6 +37,7 @@ fun KeyboardGridView(
         else -> KeyboardLayouts.symbolsRowsPage2
     }
 
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -63,5 +67,6 @@ fun KeyboardGridView(
                 }
             }
         }
+    }
     }
 }

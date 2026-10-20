@@ -13,6 +13,10 @@ import kotlinx.coroutines.launch
 
 class NeuralKeyApplication : Application() {
 
+    @Volatile
+    var suggestionEngine: com.supakeyboard.neuralkey.ime.typing.SuggestionEngine? = null
+        private set
+
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     val database by lazy { NeuralKeyDatabase.getInstance(this, applicationScope) }
@@ -33,6 +37,14 @@ class NeuralKeyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                val words = java.util.zip.GZIPInputStream(assets.open("english_words.txt.gz")).bufferedReader().use { it.readLines() }
+                suggestionEngine = com.supakeyboard.neuralkey.ime.typing.SuggestionEngine(words)
+            } catch (e: java.io.IOException) {
+                android.util.Log.e("NeuralKey", "Offline dictionary unavailable", e)
+            }
+        }
 
         // Trigger background refresh of model catalog if local DB is empty
         applicationScope.launch(Dispatchers.IO) {

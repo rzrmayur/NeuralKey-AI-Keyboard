@@ -13,6 +13,7 @@ import com.supakeyboard.neuralkey.data.network.model.KeyAuthResponse
 import com.supakeyboard.neuralkey.data.network.model.ProviderRoutingDto
 import com.supakeyboard.neuralkey.data.preferences.KeyboardPreferences
 import com.supakeyboard.neuralkey.data.security.SecureKeyStorage
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -145,21 +146,23 @@ class OpenRouterRepository(
             apiClient.streamChatCompletion(chatRequest, apiKey).collect { token ->
                 emit(token)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: IllegalStateException) {
             Log.e(TAG, "AI stream failed: missing configuration", e)
-            emit("⚠️ ${e.message}")
+            throw e
         } catch (e: IllegalArgumentException) {
             Log.e(TAG, "AI stream failed: invalid input", e)
-            emit("⚠️ ${e.message}")
+            throw e
         } catch (e: java.net.ConnectException) {
             Log.e(TAG, "AI stream failed: network unavailable", e)
-            emit("⚠️ Network connection failed. Please check your internet and try again.")
+            throw IllegalStateException("Network connection failed. Check your internet and try again.", e)
         } catch (e: java.net.SocketTimeoutException) {
             Log.e(TAG, "AI stream failed: timeout", e)
-            emit("⚠️ Request timed out. The AI service is taking too long — please try again.")
+            throw IllegalStateException("Request timed out. Please try again.", e)
         } catch (e: Exception) {
             Log.e(TAG, "AI stream failed: unexpected error", e)
-            emit("⚠️ An unexpected error occurred: ${e.message ?: "Unknown error"}")
+            throw IllegalStateException("AI request failed. Please try again.", e)
         }
     }.flowOn(Dispatchers.IO)
 

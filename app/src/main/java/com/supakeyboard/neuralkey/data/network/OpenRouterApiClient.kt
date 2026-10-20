@@ -113,11 +113,11 @@ class OpenRouterApiClient(
                     try {
                         val chunk = json.decodeFromString<ChatCompletionChunkDto>(payload)
                         val content = chunk.choices.firstOrNull()?.delta?.content
-                        if (!content.isNullOrEmpty()) {
-                            emit(content)
-                        }
-                    } catch (e: Exception) {
-                        Log.d(TAG, "Skipping non-chunk SSE frame: $payload")
+                        if (!content.isNullOrEmpty()) emit(content)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: kotlinx.serialization.SerializationException) {
+                        Log.d(TAG, "Skipping unrecognized SSE frame")
                     }
                 }
             }

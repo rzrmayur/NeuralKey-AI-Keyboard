@@ -23,6 +23,12 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,11 +77,10 @@ fun RowScope.KeyView(
 
     var isPressed by remember { mutableStateOf(false) }
     var backspaceJob by remember { mutableStateOf<Job?>(null) }
-    var lastShiftTapTime by remember { mutableStateOf(0L) }
 
     // Spacebar cursor trackpad drag accumulator
     var accumulatedDragX by remember { mutableFloatStateOf(0f) }
-    val dragStepThresholdPx = 32f
+    val dragStepThresholdPx = with(LocalDensity.current) { 12.dp.toPx() }
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.93f else 1.0f,
@@ -106,6 +111,27 @@ fun RowScope.KeyView(
         else -> theme.keyTextColor
     }
 
+    val latestIntent by rememberUpdatedState(onIntent)
+    val latestHaptics by rememberUpdatedState(hapticEnabled)
+    val latestIntensity by rememberUpdatedState(hapticIntensity)
+    val latestDisplay by rememberUpdatedState(displayText)
+    val activate: () -> Unit = {
+        when (key.type) {
+            KeyType.CHARACTER -> latestIntent(KeyboardIntent.KeyPress(latestDisplay))
+            KeyType.SPACE -> latestIntent(KeyboardIntent.KeyPress(" "))
+            KeyType.SHIFT -> latestIntent(KeyboardIntent.ToggleShift)
+            KeyType.SYMBOLS_TOGGLE -> latestIntent(KeyboardIntent.ToggleSymbols)
+            KeyType.SYMBOLS_PAGE_TOGGLE -> latestIntent(KeyboardIntent.SwitchSymbolsPage)
+            KeyType.ENTER -> latestIntent(KeyboardIntent.KeyCodePress(android.view.KeyEvent.KEYCODE_ENTER))
+            KeyType.SWITCH_IME -> latestIntent(KeyboardIntent.SwitchToNextIme)
+            KeyType.COMMA -> latestIntent(KeyboardIntent.KeyPress(","))
+            KeyType.PERIOD -> latestIntent(KeyboardIntent.KeyPress("."))
+            KeyType.BACKSPACE -> latestIntent(KeyboardIntent.DeleteBackwards)
+            KeyType.SPACER -> Unit
+        }
+    }
+    val latestActivate by rememberUpdatedState(activate)
+
     Box(
         modifier = Modifier
             .weight(key.weight)
@@ -114,115 +140,68 @@ fun RowScope.KeyView(
             .scale(scale)
             .clip(RoundedCornerShape(8.dp))
             .background(keyBgColor)
-            .pointerInput(key, isShifted, isCapsLocked) {
+            .semantics {
+                contentDescription = when (key.type) {
+                    KeyType.BACKSPACE -> "Backspace"
+                    KeyType.SWITCH_IME -> "Switch keyboard"
+                    KeyType.SPACE -> "Space"
+                    KeyType.ENTER -> "Enter"
+                    else -> displayText
+                }
+                onClick { latestActivate(); true }
+            }
+            .pointerInput(key) {
                 awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val down = awaitFirstDown()
+                    down.consume()
                     isPressed = true
-
-                    // Trigger immediate key-down haptic
-                    hapticManager.performKeyTap(view, hapticEnabled, hapticIntensity)
-
-                    when (key.type) {
-                        KeyType.BACKSPACE -> {
-                            // Immediate first delete
-                            onIntent(KeyboardIntent.DeleteBackwards)
-
-                            // Launch accelerated backspace ticker
-                            backspaceJob?.cancel()
+                    var released = false
+                    var wasDragged = false
+                    accumulatedDragX = 0f
+                    try {
+                        hapticManager.performKeyTap(view, latestHaptics, latestIntensity)
+                        if (key.type == KeyType.BACKSPACE) {
+                            latestIntent(KeyboardIntent.DeleteBackwards)
                             backspaceJob = scope.launch {
-                                delay(400) // Initial hold delay
+                                delay(400)
                                 var count = 0
                                 while (isActive) {
-                                    val isWordMode = count >= 12
-                                    onIntent(KeyboardIntent.AcceleratedDelete(isWordMode = isWordMode))
-                                    hapticManager.performCursorTick(view, hapticEnabled)
-                                    val repeatDelay = if (isWordMode) 45L else 75L
-                                    delay(repeatDelay)
-                                    count++
+                                    val wordMode = count++ >= 12
+                                    latestIntent(KeyboardIntent.AcceleratedDelete(wordMode))
+                                    hapticManager.performCursorTick(view, latestHaptics)
+                                    delay(if (wordMode) 45 else 75)
                                 }
                             }
                         }
-                        KeyType.SPACE -> {
-                            accumulatedDragX = 0f
-                        }
-                        else -> {
-                            // Non-backspace keys
-                        }
-                    }
-
-                    // Loop while pointer is held down
-                    var wasDragged = false
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        if (event.changes.all { !it.pressed }) {
-                            // Pointer released
-                            break
-                        }
-
-                        if (key.type == KeyType.SPACE) {
-                            val change = event.changes.firstOrNull()
-                            if (change != null) {
-                                val dx = change.positionChange().x
-                                accumulatedDragX += dx
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            // A system gesture or another handler may cancel this key.
+                            if (change.isConsumed) break
+                            if (!change.pressed) {
+                                released = true
+                                change.consume()
+                                break
+                            }
+                            if (key.type == KeyType.SPACE) {
+                                accumulatedDragX += change.positionChange().x
                                 if (abs(accumulatedDragX) >= dragStepThresholdPx) {
                                     wasDragged = true
                                     val steps = (accumulatedDragX / dragStepThresholdPx).toInt()
                                     accumulatedDragX -= steps * dragStepThresholdPx
-                                    onIntent(KeyboardIntent.MoveCursor(steps))
-                                    hapticManager.performCursorTick(view, hapticEnabled)
+                                    latestIntent(KeyboardIntent.MoveCursor(steps))
+                                    hapticManager.performCursorTick(view, latestHaptics)
                                 }
-                            }
+                                change.consume()
+                            } else if (change.position.x !in 0f..size.width.toFloat() ||
+                                change.position.y !in 0f..size.height.toFloat()) break
                         }
-                    }
-
-                    // UP / RELEASE
-                    isPressed = false
-                    backspaceJob?.cancel()
-                    backspaceJob = null
-
-                    when (key.type) {
-                        KeyType.CHARACTER -> {
-                            onIntent(KeyboardIntent.KeyPress(displayText))
-                        }
-                        KeyType.SPACE -> {
-                            if (!wasDragged) {
-                                onIntent(KeyboardIntent.KeyPress(" "))
-                            }
-                        }
-                        KeyType.SHIFT -> {
-                            val now = System.currentTimeMillis()
-                            if (now - lastShiftTapTime < 300) {
-                                // Double-tap detected: Caps Lock
-                                onIntent(KeyboardIntent.ToggleShift)
-                            } else {
-                                onIntent(KeyboardIntent.ToggleShift)
-                            }
-                            lastShiftTapTime = now
-                        }
-                        KeyType.SYMBOLS_TOGGLE -> {
-                            onIntent(KeyboardIntent.ToggleSymbols)
-                        }
-                        KeyType.SYMBOLS_PAGE_TOGGLE -> {
-                            onIntent(KeyboardIntent.SwitchSymbolsPage)
-                        }
-                        KeyType.ENTER -> {
-                            onIntent(KeyboardIntent.KeyCodePress(android.view.KeyEvent.KEYCODE_ENTER))
-                        }
-                        KeyType.SWITCH_IME -> {
-                            onIntent(KeyboardIntent.SwitchToNextIme)
-                        }
-                        KeyType.COMMA -> {
-                            onIntent(KeyboardIntent.KeyPress(","))
-                        }
-                        KeyType.PERIOD -> {
-                            onIntent(KeyboardIntent.KeyPress("."))
-                        }
-                        KeyType.BACKSPACE -> {
-                            // Already handled on DOWN
-                        }
-                        KeyType.SPACER -> {
-                            // Spacers are non-interactive
-                        }
+                        if (released && !wasDragged && key.type != KeyType.BACKSPACE) latestActivate()
+                    } finally {
+                        // Also runs on ACTION_CANCEL, navigation, mode changes and disposal.
+                        isPressed = false
+                        backspaceJob?.cancel()
+                        backspaceJob = null
                     }
                 }
             },
@@ -249,14 +228,18 @@ fun RowScope.KeyView(
                     text = label,
                     fontSize = 11.sp,
                     color = theme.accentPrimary.copy(alpha = 0.85f),
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             } else {
                 Text(
                     text = displayText,
                     fontSize = if (key.isFunctional) 14.sp else 19.sp,
                     fontWeight = if (key.isFunctional) FontWeight.SemiBold else FontWeight.Normal,
-                    color = contentColor
+                    color = contentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip
                 )
             }
         }

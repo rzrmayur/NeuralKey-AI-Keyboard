@@ -10,6 +10,16 @@
 
 ---
 
+## Version 1.1.0
+
+S22/system-navigation layout fixes, cancellation-safe key gestures, and offline English suggestions/autocorrection. See [release notes](docs/releases/v1.1.0.md) for installation and signing details.
+
+- Suggestions use a bundled SCOWL dictionary and never send typing to an AI provider.
+- Preferences has independent switches for suggestions and autocorrection.
+- Backspace immediately after a correction restores the original spelling.
+- Password fields are excluded from draft extraction and AI actions.
+- CI validates editing, layout and gestures before publishing the development APK.
+
 ## 🌟 Highlights
 
 * **100% Jetpack Compose IME:** Entire keyboard UI, action panels, and streaming views rendered natively via `ComposeView` inside a lifecycle-aware `InputMethodService`.
