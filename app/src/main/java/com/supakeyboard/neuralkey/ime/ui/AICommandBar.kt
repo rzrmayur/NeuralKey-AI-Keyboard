@@ -7,6 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.KeyboardHide
+import androidx.compose.material.icons.filled.PhonelinkSetup
+import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -14,12 +16,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
+import com.supakeyboard.neuralkey.ime.mvi.OneHandedMode
 import com.supakeyboard.neuralkey.ime.theme.KeyboardTheme
 import com.supakeyboard.neuralkey.ime.typing.InputFieldPolicy
 
@@ -29,8 +33,10 @@ fun AICommandBar(
     uiState: KeyboardUiState,
     onIntent: (KeyboardIntent) -> Unit,
     modifier: Modifier = Modifier,
-    theme: KeyboardTheme = uiState.currentTheme
+    theme: KeyboardTheme = uiState.currentTheme,
+    isFoldablePosture: Boolean = false
 ) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
     Row(
         modifier.fillMaxWidth().height(48.dp).background(theme.commandBarBg).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -43,14 +49,20 @@ fun AICommandBar(
             InputFieldPolicy.allowsSuggestions(uiState.inputType) && uiState.suggestions.isNotEmpty()
         if (showSuggestions) {
             Row(Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
-                uiState.suggestions.take(3).forEach { word ->
+                uiState.suggestions.take(3).forEachIndexed { idx, word ->
                     Box(
                         Modifier.weight(1f).fillMaxHeight()
                             .clickable { onIntent(KeyboardIntent.SelectSuggestion(word)) }
                             .padding(horizontal = 3.dp), contentAlignment = Alignment.Center
                     ) {
-                        Text(word, color = theme.keyTextColor, fontSize = 15.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            text = word,
+                            color = if (idx == 1) theme.accentPrimary else theme.keyTextColor,
+                            fontSize = 15.sp,
+                            fontWeight = if (idx == 1) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -62,6 +74,33 @@ fun AICommandBar(
                 .clickable(enabled = !uiState.isSensitiveField) { onIntent(KeyboardIntent.OpenModelPicker) }
                 .padding(horizontal = 8.dp, vertical = 10.dp)
         )
+
+        if (isFoldablePosture) {
+            IconButton(
+                onClick = { onIntent(KeyboardIntent.ToggleSplitLayout) },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ViewColumn,
+                    contentDescription = "Toggle split keyboard",
+                    tint = if (uiState.splitKeyboardOnFold) theme.accentPrimary else theme.keyFunctionalTextColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        } else if (screenWidthDp >= 340) {
+            IconButton(
+                onClick = { onIntent(KeyboardIntent.CycleOneHandedMode) },
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PhonelinkSetup,
+                    contentDescription = "One-handed mode",
+                    tint = if (uiState.oneHandedMode != OneHandedMode.OFF) theme.accentPrimary else theme.keyFunctionalTextColor,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+
         IconButton(onClick = { onIntent(KeyboardIntent.HideKeyboard) }) {
             Icon(Icons.Default.KeyboardHide, "Hide keyboard", tint = theme.keyFunctionalTextColor)
         }

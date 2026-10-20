@@ -6,15 +6,18 @@ import com.supakeyboard.neuralkey.data.network.OpenRouterApiClient
 import com.supakeyboard.neuralkey.data.preferences.KeyboardPreferences
 import com.supakeyboard.neuralkey.data.repository.OpenRouterRepository
 import com.supakeyboard.neuralkey.data.security.SecureKeyStorage
+import com.supakeyboard.neuralkey.ime.typing.KeyMemoryStore
+import com.supakeyboard.neuralkey.ime.typing.SuggestionEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class NeuralKeyApplication : Application() {
 
     @Volatile
-    var suggestionEngine: com.supakeyboard.neuralkey.ime.typing.SuggestionEngine? = null
+    var suggestionEngine: SuggestionEngine? = null
         private set
 
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -22,6 +25,7 @@ class NeuralKeyApplication : Application() {
     val database by lazy { NeuralKeyDatabase.getInstance(this, applicationScope) }
     val keyboardPreferences by lazy { KeyboardPreferences.getInstance(this) }
     val secureKeyStorage by lazy { SecureKeyStorage.getInstance(this) }
+    val keyMemoryStore by lazy { KeyMemoryStore.getInstance(this) }
     val openRouterApiClient by lazy { OpenRouterApiClient() }
 
     val openRouterRepository by lazy {
@@ -40,7 +44,12 @@ class NeuralKeyApplication : Application() {
         applicationScope.launch(Dispatchers.IO) {
             try {
                 val words = java.util.zip.GZIPInputStream(assets.open("english_words.dict")).bufferedReader().use { it.readLines() }
-                suggestionEngine = com.supakeyboard.neuralkey.ime.typing.SuggestionEngine(words)
+                val engine = SuggestionEngine(words)
+                engine.restoreMemory(keyMemoryStore.loadSnapshot())
+                engine.onMemoryUpdated = { snapshot ->
+                    keyMemoryStore.saveSnapshot(snapshot)
+                }
+                suggestionEngine = engine
             } catch (e: java.io.IOException) {
                 android.util.Log.e("NeuralKey", "Offline dictionary unavailable", e)
             }
@@ -48,10 +57,30 @@ class NeuralKeyApplication : Application() {
 
         // Trigger background refresh of model catalog if local DB is empty
         applicationScope.launch(Dispatchers.IO) {
-            val count = database.modelDao().getModelCount()
-            if (count == 0 && secureKeyStorage.hasApiKey()) {
-                openRouterRepository.refreshModels()
+            try {
+                if (secureKeyStorage.hasApiKey() && database.modelDao().getModelCount() == 0) {
+                    openRouterRepository.refreshModels()
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("NeuralKey", "Deferred background model catalog check", e)
             }
+        }
+    }
+
+    override fun onTerminate() {
+        applicationScope.cancel()
+        super.onTerminate()
+    }
+
+    fun clearKeyMemory() {
+        keyMemoryStore.clearAll()
+        suggestionEngine?.clearMemory()
+    }
+
+    fun teachCustomWord(word: String) {
+        val trimmed = word.trim()
+        if (SuggestionEngine.isWord(trimmed)) {
+            suggestionEngine?.recordWord(trimmed)
         }
     }
 

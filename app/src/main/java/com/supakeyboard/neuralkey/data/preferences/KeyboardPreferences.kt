@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.supakeyboard.neuralkey.ime.mvi.OneHandedMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -53,9 +54,21 @@ class KeyboardPreferences(private val context: Context) {
 
     val suggestionsEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_SUGGESTIONS] ?: true }
     val autoCorrectionEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_AUTO_CORRECTION] ?: true }
+    val keyMemoryEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_MEMORY_ENABLED] ?: true }
+    val nextWordPredictionEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_NEXT_WORD_PREDICTION] ?: true }
+    val splitKeyboardOnFold: Flow<Boolean> = dataStore.data.map { it[KEY_SPLIT_ON_FOLD] ?: true }
+
+    val oneHandedMode: Flow<OneHandedMode> = dataStore.data.map { preferences ->
+        val raw = preferences[KEY_ONE_HANDED_MODE] ?: OneHandedMode.OFF.name
+        runCatching { OneHandedMode.valueOf(raw) }.getOrDefault(OneHandedMode.OFF)
+    }
 
     suspend fun setSuggestionsEnabled(enabled: Boolean) { dataStore.edit { it[KEY_SUGGESTIONS] = enabled } }
     suspend fun setAutoCorrectionEnabled(enabled: Boolean) { dataStore.edit { it[KEY_AUTO_CORRECTION] = enabled } }
+    suspend fun setKeyMemoryEnabled(enabled: Boolean) { dataStore.edit { it[KEY_MEMORY_ENABLED] = enabled } }
+    suspend fun setNextWordPredictionEnabled(enabled: Boolean) { dataStore.edit { it[KEY_NEXT_WORD_PREDICTION] = enabled } }
+    suspend fun setSplitKeyboardOnFold(enabled: Boolean) { dataStore.edit { it[KEY_SPLIT_ON_FOLD] = enabled } }
+    suspend fun setOneHandedMode(mode: OneHandedMode) { dataStore.edit { it[KEY_ONE_HANDED_MODE] = mode.name } }
 
     val selectedTheme: Flow<String> = dataStore.data.map { preferences ->
         preferences[KEY_THEME] ?: "SYSTEM_DYNAMIC"
@@ -134,6 +147,11 @@ class KeyboardPreferences(private val context: Context) {
     companion object {
         private val KEY_SUGGESTIONS = booleanPreferencesKey("suggestions_enabled")
         private val KEY_AUTO_CORRECTION = booleanPreferencesKey("auto_correction_enabled")
+        private val KEY_MEMORY_ENABLED = booleanPreferencesKey("key_memory_enabled")
+        private val KEY_NEXT_WORD_PREDICTION = booleanPreferencesKey("next_word_prediction_enabled")
+        private val KEY_SPLIT_ON_FOLD = booleanPreferencesKey("split_keyboard_on_fold")
+        private val KEY_ONE_HANDED_MODE = stringPreferencesKey("one_handed_mode")
+
         const val DEFAULT_ACTIVE_MODEL = "google/gemini-2.5-flash"
         val DEFAULT_PINNED_MODELS = setOf(
             "google/gemini-2.5-flash",

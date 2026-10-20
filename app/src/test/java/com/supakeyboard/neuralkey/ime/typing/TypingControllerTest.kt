@@ -92,6 +92,23 @@ class TypingControllerTest {
         assertEquals("hell", editor.text)
     }
 
+    @Test fun nextWordSuggestionCanBeChosenDirectlyAfterSpace() {
+        val editor = Editor("thank ")
+        val nextCandidates = engine.nextWordSuggestions("thank")
+        assertTrue("you" in nextCandidates)
+        assertTrue(controller.choose(editor, "you", nextCandidates))
+        assertEquals("thank you ", editor.text)
+    }
+
+    @Test fun typingSpaceLearnsBigramIntoKeyMemory() {
+        val localEngine = SuggestionEngine(listOf("hello", "world"))
+        val localController = TypingController { localEngine }
+        val editor = Editor("hello supakey")
+        localController.type(editor, " ", true)
+        assertEquals("hello supakey ", editor.text)
+        assertTrue("supakey" in localEngine.nextWordSuggestions("hello"))
+    }
+
     private class Editor(var text: String) : TypingEditor {
         var cursor = text.length
         var selectionStart: Int? = null

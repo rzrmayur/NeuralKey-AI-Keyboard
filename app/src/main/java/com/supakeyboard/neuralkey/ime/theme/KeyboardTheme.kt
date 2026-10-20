@@ -193,6 +193,138 @@ object KeyboardThemes {
         isDark = true
     )
 
+    val DRACULA_PRO = KeyboardTheme(
+        id = "DRACULA_PRO",
+        name = "Dracula Pro",
+        description = "Gothic midnight slate with electric vampire purple & neon pink",
+        emoji = "🧛",
+        backgroundBrush = Brush.verticalGradient(
+            colors = listOf(Color(0xFF282A36), Color(0xFF191A21))
+        ),
+        surfaceColor = Color(0xFF1E1F29),
+        keyBgColor = Color(0xFF343746),
+        keyFunctionalBgColor = Color(0xFF262833),
+        keyPressedBgColor = Color(0xFF44475A),
+        keyTextColor = Color(0xFFF8F8F2),
+        keySecondaryTextColor = Color(0xFFBD93F9),
+        keyFunctionalTextColor = Color(0xFF8BE9FD),
+        accentPrimary = Color(0xFFBD93F9),
+        accentSecondary = Color(0xFFFF79C6),
+        commandBarBg = Color(0xFF21222C),
+        previewCardBg = Color(0xFF1E1F29),
+        isDark = true
+    )
+
+    val NORDIC_FROST = KeyboardTheme(
+        id = "NORDIC_FROST",
+        name = "Nordic Frost",
+        description = "Arctic polar night slate with glacial ice cyan & frost blue",
+        emoji = "❄️",
+        backgroundBrush = Brush.verticalGradient(
+            colors = listOf(Color(0xFF2E3440), Color(0xFF242933))
+        ),
+        surfaceColor = Color(0xFF242933),
+        keyBgColor = Color(0xFF3B4252),
+        keyFunctionalBgColor = Color(0xFF2E3440),
+        keyPressedBgColor = Color(0xFF4C566A),
+        keyTextColor = Color(0xFFECEFF4),
+        keySecondaryTextColor = Color(0xFF88C0D0),
+        keyFunctionalTextColor = Color(0xFFD8DEE9),
+        accentPrimary = Color(0xFF88C0D0),
+        accentSecondary = Color(0xFF81A1C1),
+        commandBarBg = Color(0xFF292E39),
+        previewCardBg = Color(0xFF242933),
+        isDark = true
+    )
+
+    val MOCHA_ESPRESSO = KeyboardTheme(
+        id = "MOCHA_ESPRESSO",
+        name = "Mocha Espresso",
+        description = "Cozy dark-roast espresso with warm caramel peach & soft lavender",
+        emoji = "☕",
+        backgroundBrush = Brush.verticalGradient(
+            colors = listOf(Color(0xFF1E1E2E), Color(0xFF11111B))
+        ),
+        surfaceColor = Color(0xFF181825),
+        keyBgColor = Color(0xFF313244),
+        keyFunctionalBgColor = Color(0xFF242536),
+        keyPressedBgColor = Color(0xFF45475A),
+        keyTextColor = Color(0xFFCDD6F4),
+        keySecondaryTextColor = Color(0xFFFAB387),
+        keyFunctionalTextColor = Color(0xFFBAC2DE),
+        accentPrimary = Color(0xFFFAB387),
+        accentSecondary = Color(0xFFCBA6F7),
+        commandBarBg = Color(0xFF181825),
+        previewCardBg = Color(0xFF141420),
+        isDark = true
+    )
+
+    val CARBON_TITANIUM = KeyboardTheme(
+        id = "CARBON_TITANIUM",
+        name = "Carbon Titanium",
+        description = "Brushed stealth gunmetal carbon with hyper-orange mechanical legends",
+        emoji = "🏎️",
+        backgroundBrush = Brush.verticalGradient(
+            colors = listOf(Color(0xFF181A1D), Color(0xFF0E1012))
+        ),
+        surfaceColor = Color(0xFF111315),
+        keyBgColor = Color(0xFF23262A),
+        keyFunctionalBgColor = Color(0xFF1A1C1F),
+        keyPressedBgColor = Color(0xFF363A40),
+        keyTextColor = Color(0xFFF3F4F6),
+        keySecondaryTextColor = Color(0xFFFF6B00),
+        keyFunctionalTextColor = Color(0xFF9CA3AF),
+        accentPrimary = Color(0xFFFF6B00),
+        accentSecondary = Color(0xFFF59E0B),
+        commandBarBg = Color(0xFF141619),
+        previewCardBg = Color(0xFF111315),
+        isDark = true
+    )
+
+    val ABYSSAL_BIOLUME = KeyboardTheme(
+        id = "ABYSSAL_BIOLUME",
+        name = "Abyssal Biolume",
+        description = "Deep ocean trench midnight teal with bioluminescent aqua & coral",
+        emoji = "🌊",
+        backgroundBrush = Brush.verticalGradient(
+            colors = listOf(Color(0xFF061E29), Color(0xFF031017))
+        ),
+        surfaceColor = Color(0xFF04151F),
+        keyBgColor = Color(0xFF0C2D3D),
+        keyFunctionalBgColor = Color(0xFF08202C),
+        keyPressedBgColor = Color(0xFF14455C),
+        keyTextColor = Color(0xFFE0FBFC),
+        keySecondaryTextColor = Color(0xFF00F5D4),
+        keyFunctionalTextColor = Color(0xFF98C1D9),
+        accentPrimary = Color(0xFF00F5D4),
+        accentSecondary = Color(0xFFFF5E7E),
+        commandBarBg = Color(0xFF051924),
+        previewCardBg = Color(0xFF04151F),
+        isDark = true
+    )
+
+    val ROSE_QUARTZ = KeyboardTheme(
+        id = "ROSE_QUARTZ",
+        name = "Rose Quartz",
+        description = "Soft luxury daylight blush studio with crimson rose accents",
+        emoji = "🌹",
+        backgroundBrush = Brush.verticalGradient(
+            colors = listOf(Color(0xFFFFF1F2), Color(0xFFFFE4E6))
+        ),
+        surfaceColor = Color(0xFFFFF5F6),
+        keyBgColor = Color(0xFFFFFFFF),
+        keyFunctionalBgColor = Color(0xFFFECDD3),
+        keyPressedBgColor = Color(0xFFFDA4AF),
+        keyTextColor = Color(0xFF4C0519),
+        keySecondaryTextColor = Color(0xFFE11D48),
+        keyFunctionalTextColor = Color(0xFF881337),
+        accentPrimary = Color(0xFFE11D48),
+        accentSecondary = Color(0xFFFB7185),
+        commandBarBg = Color(0xFFFFE4E6),
+        previewCardBg = Color(0xFFFFFFFF),
+        isDark = false
+    )
+
     val CHALK_STUDIO = KeyboardTheme(
         id = "CHALK_STUDIO",
         name = "Chalk Studio",
@@ -224,6 +356,12 @@ object KeyboardThemes {
         SUNSET_HORIZON,
         EMERALD_MATRIX,
         DEEP_SPACE,
+        DRACULA_PRO,
+        NORDIC_FROST,
+        MOCHA_ESPRESSO,
+        CARBON_TITANIUM,
+        ABYSSAL_BIOLUME,
+        ROSE_QUARTZ,
         CHALK_STUDIO
     )
 

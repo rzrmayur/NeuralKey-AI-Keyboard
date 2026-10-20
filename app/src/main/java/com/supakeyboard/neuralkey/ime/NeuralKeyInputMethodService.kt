@@ -211,8 +211,13 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             is KeyboardIntent.KeyPress -> {
                 currentInputConnection?.let {
                     val state = viewModel.uiState.value
-                    typing.type(ConnectionEditor(it), intent.char,
-                        state.autoCorrectionEnabled && InputFieldPolicy.allowsSuggestions(state.inputType))
+                    val allowsAssistance = InputFieldPolicy.allowsSuggestions(state.inputType)
+                    typing.type(
+                        editor = ConnectionEditor(it),
+                        text = intent.char,
+                        autoCorrect = state.autoCorrectionEnabled && allowsAssistance,
+                        learnMemory = state.keyMemoryEnabled && allowsAssistance
+                    )
                 }
                 if (intent.char.any { it.isLetter() }) viewModel.characterTyped()
                 updateDraftAfterEdit()
@@ -243,9 +248,15 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             }
             is KeyboardIntent.SelectSuggestion -> {
                 val state = viewModel.uiState.value
-                if (state.suggestionsEnabled && InputFieldPolicy.allowsSuggestions(state.inputType)) {
+                val allowsAssistance = InputFieldPolicy.allowsSuggestions(state.inputType)
+                if (state.suggestionsEnabled && allowsAssistance) {
                     currentInputConnection?.let {
-                        typing.choose(ConnectionEditor(it), intent.word, state.suggestions)
+                        typing.choose(
+                            editor = ConnectionEditor(it),
+                            suggestion = intent.word,
+                            candidates = state.suggestions,
+                            learnMemory = state.keyMemoryEnabled && allowsAssistance
+                        )
                     }
                     updateDraftAfterEdit()
                 }
@@ -259,6 +270,9 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             is KeyboardIntent.ToggleShift -> viewModel.toggleShift()
             is KeyboardIntent.ToggleSymbols -> viewModel.toggleSymbols()
             is KeyboardIntent.SwitchSymbolsPage -> viewModel.switchSymbolsPage()
+            is KeyboardIntent.SetOneHandedMode -> viewModel.setOneHandedMode(intent.mode)
+            is KeyboardIntent.CycleOneHandedMode -> viewModel.cycleOneHandedMode()
+            is KeyboardIntent.ToggleSplitLayout -> viewModel.toggleSplitLayout()
             is KeyboardIntent.OpenAIMenu -> {
                 val draft = extractCurrentDraft()
                 viewModel.openAIMenu(draft)
@@ -375,13 +389,31 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             return
         }
         val ic = currentInputConnection ?: return
-        val word = typing.currentWord(ConnectionEditor(ic))
-        if (word == null) { viewModel.updateSuggestions(emptyList()); return }
-        // Publish the literal word immediately; compute dictionary matches off the UI thread.
+        val editor = ConnectionEditor(ic)
+        val word = typing.currentWord(editor)
+        val prevWord = typing.previousWord(editor)
+        val engine = (application as NeuralKeyApplication).suggestionEngine
+        if (word == null) {
+            // If cursor is immediately after a space following a word, offer contextual next-word predictions
+            if (state.nextWordPredictionEnabled && prevWord != null && editor.beforeCursor(1) == " " && engine != null) {
+                suggestionJob = lifecycleScope.launch {
+                    val nextWords = withContext(Dispatchers.Default) { engine.nextWordSuggestions(prevWord) }
+                    val latest = viewModel.uiState.value
+                    if (inputActive && latest.suggestionsEnabled && currentInputConnection === ic &&
+                        typing.currentWord(ConnectionEditor(ic)) == null) {
+                        viewModel.updateSuggestions(nextWords)
+                    }
+                }
+            } else {
+                viewModel.updateSuggestions(emptyList())
+            }
+            return
+        }
+        // Publish the literal word immediately; compute dictionary + Key Memory matches off the UI thread.
         viewModel.updateSuggestions(listOf(word))
-        val engine = (application as NeuralKeyApplication).suggestionEngine ?: return
+        if (engine == null) return
         suggestionJob = lifecycleScope.launch {
-            val words = withContext(Dispatchers.Default) { engine.suggestions(word) }
+            val words = withContext(Dispatchers.Default) { engine.suggestions(word, prevWord) }
             val latest = viewModel.uiState.value
             if (inputActive && latest.suggestionsEnabled && currentInputConnection === ic &&
                 typing.currentWord(ConnectionEditor(ic)) == word) viewModel.updateSuggestions(words)

@@ -213,6 +213,109 @@ data class UserPromptEntity(
                 category = "Translation",
                 orderIndex = 20,
                 isBuiltIn = true
+            ),
+
+            // --- Email & Drafts Suite ---
+            UserPromptEntity(
+                id = 22,
+                title = "Reply: Confirm & Accept",
+                promptInstruction = "Transform the following notes or draft into a warm, structured professional email reply that confirms receipt, accepts the proposal or meeting, and clearly states next steps.",
+                iconKey = "mark_email_read",
+                category = "Email & Drafts",
+                orderIndex = 21,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 23,
+                title = "Reply: Polite Decline",
+                promptInstruction = "Draft a gracious, diplomatic email reply that politely declines the request, invitation, or proposal while preserving goodwill and professional warmth.",
+                iconKey = "unsubscribe",
+                category = "Email & Drafts",
+                orderIndex = 22,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 24,
+                title = "Cold Outreach Email",
+                promptInstruction = "Turn the following notes into a concise, high-converting executive cold outreach email with a compelling hook, clear value proposition, and a low-friction call to action.",
+                iconKey = "forward_to_inbox",
+                category = "Email & Drafts",
+                orderIndex = 23,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 25,
+                title = "Follow-Up Nudge",
+                promptInstruction = "Write a courteous, action-oriented follow-up email checking in on a previous thread or pending deliverable without sounding pushy.",
+                iconKey = "schedule_send",
+                category = "Email & Drafts",
+                orderIndex = 24,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 26,
+                title = "Meeting Recap & Actions",
+                promptInstruction = "Transform the following rough meeting notes into a structured executive recap email with: 1) Summary, 2) Key Decisions, and 3) Action Items with Owners.",
+                iconKey = "fact_check",
+                category = "Email & Drafts",
+                orderIndex = 25,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 27,
+                title = "Subject Line Generator",
+                promptInstruction = "Generate 3 high-impact, click-worthy email subject lines (Executive, Urgent/Direct, and Conversational) plus a 1-line preview text for the following email draft.",
+                iconKey = "title",
+                category = "Email & Drafts",
+                orderIndex = 26,
+                isBuiltIn = true
+            ),
+
+            // --- Smart Writing & Engineering ---
+            UserPromptEntity(
+                id = 28,
+                title = "Expand & Elaborate",
+                promptInstruction = "Expand the following shorthand notes or brief thought into a well-structured, articulate, and persuasive paragraph with smooth transitions.",
+                iconKey = "open_in_full",
+                category = "Smart Writing",
+                orderIndex = 27,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 29,
+                title = "Brainstorm 5 Angles",
+                promptInstruction = "Based on the following topic or draft, generate 5 distinct, creative angles, hooks, or strategic approaches in numbered bullet points.",
+                iconKey = "lightbulb",
+                category = "Smart Writing",
+                orderIndex = 28,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 30,
+                title = "Pros, Cons & Risks",
+                promptInstruction = "Analyze the proposal or idea in the text and output a structured breakdown of Pros, Cons, and Potential Blind Spots / Risks.",
+                iconKey = "balance",
+                category = "Smart Writing",
+                orderIndex = 29,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 31,
+                title = "Bug / Jira Spec",
+                promptInstruction = "Convert the following rough issue or feature description into a structured software engineering ticket with Summary, Context/Steps, Expected Outcome, and Acceptance Criteria.",
+                iconKey = "bug_report",
+                category = "Smart Writing",
+                orderIndex = 30,
+                isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 32,
+                title = "Translate to German",
+                promptInstruction = "Translate the following text into natural, fluent, idiomatic German (Deutsch).",
+                iconKey = "language",
+                category = "Translation",
+                orderIndex = 31,
+                isBuiltIn = true
             )
         )
     }
