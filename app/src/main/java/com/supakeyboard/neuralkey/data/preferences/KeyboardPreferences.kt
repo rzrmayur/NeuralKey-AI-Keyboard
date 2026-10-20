@@ -58,7 +58,7 @@ class KeyboardPreferences(private val context: Context) {
     suspend fun setAutoCorrectionEnabled(enabled: Boolean) { dataStore.edit { it[KEY_AUTO_CORRECTION] = enabled } }
 
     val selectedTheme: Flow<String> = dataStore.data.map { preferences ->
-        preferences[KEY_THEME] ?: "SYSTEM"
+        preferences[KEY_THEME] ?: "SYSTEM_DYNAMIC"
     }
 
     val customSystemPrompt: Flow<String> = dataStore.data.map { preferences ->

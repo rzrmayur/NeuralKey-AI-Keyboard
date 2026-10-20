@@ -14,11 +14,12 @@ interface TypingEditor {
 class TypingController(private val engine: () -> SuggestionEngine?) {
     private data class Undo(val original: String, val replacement: String, val before: String, val after: String)
     private var undo: Undo? = null
+    private var keepOriginalOnce: String? = null
 
     fun currentWord(editor: TypingEditor): String? {
         if (editor.hasSelection()) return null
         val after = editor.afterCursor(1).firstOrNull()
-        if (after != null && (after.isLetterOrDigit() || after in "_@'’")) return null
+        if (after != null && (after.isLetterOrDigit() || after in "_@'’./")) return null
         // Reject whole URL/email/code tokens instead of correcting a fragment within them.
         val token = editor.beforeCursor(128).takeLastWhile { !it.isWhitespace() }
             .trimStart('(', '[', '{', '"', '“')
@@ -28,7 +29,8 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
     fun type(editor: TypingEditor, text: String, autoCorrect: Boolean) {
         undo = null
         val word = if (autoCorrect && text == " ") currentWord(editor) else null
-        val corrected = word?.let { engine()?.correction(it) }
+        val corrected = word?.takeUnless { it == keepOriginalOnce }?.let { engine()?.correction(it) }
+        keepOriginalOnce = null
         if (word != null && corrected != null && word != corrected) {
             editor.batch {
                 editor.deleteBefore(word.length)
@@ -62,6 +64,7 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
                 editor.deleteBefore(previous.replacement.length)
                 editor.commit(previous.original)
             }
+            keepOriginalOnce = previous.original
         } else {
             val before = editor.beforeCursor(2)
             // deleteSurroundingText uses UTF-16 units; don't split an emoji surrogate pair.
@@ -76,5 +79,5 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
         }
     }
 
-    fun reset() { undo = null }
+    fun reset() { undo = null; keepOriginalOnce = null }
 }

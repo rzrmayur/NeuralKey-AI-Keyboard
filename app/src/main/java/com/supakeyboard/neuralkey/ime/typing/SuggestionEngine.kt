@@ -29,7 +29,7 @@ class SuggestionEngine(dictionary: List<String>) {
             typed.drop(1).any { it.isUpperCase() }) return null
         val lower = typed.lowercase(Locale.ROOT)
         corrections[lower]?.let { return matchCase(typed, it) }
-        if (lower in words || typed.length < 4) return null
+        if (lower in words || typed.length < 4 || typed.first().isUpperCase()) return null
         // Only one-edit matches from our common-word vocabulary can auto-replace.
         // Ambiguous and rare matches remain suggestions for the user to choose.
         val frequent = edits(lower).filter { it in ranks }

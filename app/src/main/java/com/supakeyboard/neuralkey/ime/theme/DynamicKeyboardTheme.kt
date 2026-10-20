@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.ComposeView
  */
 fun createDynamicKeyboardTheme(context: Context, isDark: Boolean = true): KeyboardTheme {
     val fallback = KeyboardThemes.CYBERPUNK_NEON
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return fallback
 
     return try {
         val colorScheme = if (isDark) {

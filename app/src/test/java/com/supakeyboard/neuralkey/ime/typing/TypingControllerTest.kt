@@ -14,6 +14,13 @@ class TypingControllerTest {
         controller.backspace(editor)
         assertEquals("Please recieve", editor.text)
     }
+    @Test fun undoThenSpaceHonorsTheOriginalSpelling() {
+        val editor = Editor("teh")
+        controller.type(editor, " ", true)
+        controller.backspace(editor)
+        controller.type(editor, " ", true)
+        assertEquals("teh ", editor.text)
+    }
     @Test fun correctionKeepsCapitalization() {
         val editor = Editor("Thsi")
         controller.type(editor, " ", true)

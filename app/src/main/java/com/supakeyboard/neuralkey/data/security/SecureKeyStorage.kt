@@ -18,13 +18,20 @@ class SecureKeyStorage(private val context: Context) {
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
                 .build()
 
-            EncryptedSharedPreferences.create(
+            val encrypted = EncryptedSharedPreferences.create(
                 context,
                 ENCRYPTED_PREFS_NAME,
                 masterKey,
                 EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
+            val legacy = context.getSharedPreferences(FALLBACK_PREFS_NAME, Context.MODE_PRIVATE)
+            val oldKey = legacy.getString(KEY_OPENROUTER_API_KEY, null)
+            if (oldKey != null && !encrypted.contains(KEY_OPENROUTER_API_KEY)) {
+                check(encrypted.edit().putString(KEY_OPENROUTER_API_KEY, oldKey).commit())
+            }
+            legacy.edit().clear().apply()
+            encrypted
         } catch (e: Exception) {
             Log.e(TAG, "Encrypted key storage unavailable", e)
             null // Fail closed; never save an API key in plaintext.
@@ -32,7 +39,8 @@ class SecureKeyStorage(private val context: Context) {
     }
 
     fun getApiKey(): String? {
-        val key = prefs?.getString(KEY_OPENROUTER_API_KEY, null)?.trim()
+        val key = try { prefs?.getString(KEY_OPENROUTER_API_KEY, null)?.trim() }
+            catch (_: RuntimeException) { null }
         return if (key.isNullOrBlank()) null else key
     }
 

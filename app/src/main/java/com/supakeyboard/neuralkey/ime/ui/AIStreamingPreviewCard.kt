@@ -176,7 +176,7 @@ fun AIStreamingPreviewCard(
 
             // Action Buttons Bar with scale-in + fade-in animation when streaming completes
             AnimatedVisibility(
-                visible = streamingMode.streamedText.isNotEmpty(),
+                visible = !streamingMode.isStreaming && streamingMode.error == null && streamingMode.streamedText.isNotBlank(),
                 enter = scaleIn(animationSpec = tween(350)) + fadeIn(animationSpec = tween(350)),
                 exit = fadeOut(animationSpec = tween(200))
             ) {

@@ -228,6 +228,7 @@ object KeyboardThemes {
     )
 
     fun getTheme(id: String): KeyboardTheme {
+        if (id.equals("SYSTEM", ignoreCase = true)) return SYSTEM_DYNAMIC
         return allThemes.find { it.id.equals(id, ignoreCase = true) } ?: CYBERPUNK_NEON
     }
 }
