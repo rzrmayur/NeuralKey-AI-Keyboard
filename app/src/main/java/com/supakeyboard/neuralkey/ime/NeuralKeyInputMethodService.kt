@@ -1,10 +1,10 @@
 package com.supakeyboard.neuralkey.ime
 
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
-import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
@@ -20,9 +20,12 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.supakeyboard.neuralkey.NeuralKeyApplication
 import com.supakeyboard.neuralkey.ime.lifecycle.LifecycleInputMethodService
+import com.supakeyboard.neuralkey.ime.mvi.AICommitAction
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
+import com.supakeyboard.neuralkey.ime.mvi.VoiceTransformMode
+import com.supakeyboard.neuralkey.ime.slash.SlashCommandEngine
 import com.supakeyboard.neuralkey.ime.typing.InputFieldPolicy
 import com.supakeyboard.neuralkey.ime.typing.TypingController
 import com.supakeyboard.neuralkey.ime.typing.TypingEditor
@@ -71,8 +74,6 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
 
     override fun onConfigureWindow(win: Window, isFullscreen: Boolean, isCandidatesOnly: Boolean) {
         super.onConfigureWindow(win, isFullscreen, isCandidatesOnly)
-        // Give the input host one explicit owner for system-bar padding. Do not modify
-        // the framework's IME touch region or hide its keyboard-switch/hide controls.
         win.setDecorFitsSystemWindows(false)
     }
 
@@ -133,8 +134,6 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         }
     }
 
-    // Preserve InputMethodService's touch region; the system navigation controls
-    // must not become part of the keyboard's touchable frame.
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         super.onStartInput(info, restarting)
         inputActive = true
@@ -144,12 +143,14 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         viewModel.updateInputContext(info?.packageName, info)
         viewModel.updateInputType(info?.inputType ?: 0)
         viewModel.setSensitiveField(InputFieldPolicy.isSensitive(info?.inputType ?: 0))
+        runCatching { (application as NeuralKeyApplication).clipboardHistoryManager.syncFromSystemClipboard() }
         updateDraftAfterEdit()
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         inputHost?.refreshInsets()
+        runCatching { (application as NeuralKeyApplication).clipboardHistoryManager.syncFromSystemClipboard() }
         updateDraftAfterEdit()
     }
 
@@ -188,7 +189,6 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
 
     /**
      * Extracts the user's current draft from the active InputConnection.
-     * Uses selected text or a bounded prefix before the cursor, matching replacement scope.
      */
     fun extractCurrentDraft(): String {
         if (viewModel.uiState.value.isSensitiveField) return ""
@@ -199,21 +199,43 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         } catch (_: RuntimeException) { "" }
     }
 
-    /**
-     * Handles deterministic user intents from the UI layer.
-     * IME-level operations (input connection calls) stay here;
-     * state mutations are delegated to [KeyboardViewModel].
-     */
     fun processIntent(intent: KeyboardIntent) {
-        if (viewModel.uiState.value.isSensitiveField && (intent is KeyboardIntent.OpenAIMenu ||
-                intent is KeyboardIntent.TriggerAIAction || intent is KeyboardIntent.TriggerCustomPrompt)) return
+        val sensitiveBlocked = viewModel.uiState.value.isSensitiveField && (
+            intent is KeyboardIntent.OpenAIMenu ||
+                intent is KeyboardIntent.TriggerAIAction ||
+                intent is KeyboardIntent.TriggerCustomPrompt ||
+                intent is KeyboardIntent.TriggerGhostCompletion ||
+                intent is KeyboardIntent.OpenClipboardFusion ||
+                intent is KeyboardIntent.OpenModelArena ||
+                intent is KeyboardIntent.OpenVoiceAction
+            )
+        if (sensitiveBlocked) return
+
         when (intent) {
             is KeyboardIntent.KeyPress -> {
-                currentInputConnection?.let {
+                currentInputConnection?.let { ic ->
                     val state = viewModel.uiState.value
                     val allowsAssistance = InputFieldPolicy.allowsSuggestions(state.inputType)
+                    val editor = ConnectionEditor(ic)
+
+                    // Check instant offline slash macro expansion on Space (e.g. /date, /time, /shrug, /calc 12*4)
+                    if (intent.char == " " && allowsAssistance && !state.isSensitiveField) {
+                        val before = editor.beforeCursor(256)
+                        val latestClip = (application as? NeuralKeyApplication)?.clipboardHistoryManager?.latestClipText()
+                        val expanded = SlashCommandEngine.evaluateOfflineMacro(before, latestClip)
+                        if (expanded != null && expanded != before) {
+                            typing.reset()
+                            editor.batch {
+                                editor.deleteBefore(before.length)
+                                editor.commit("$expanded ")
+                            }
+                            updateDraftAfterEdit()
+                            return
+                        }
+                    }
+
                     typing.type(
-                        editor = ConnectionEditor(it),
+                        editor = editor,
                         text = intent.char,
                         autoCorrect = state.autoCorrectionEnabled && allowsAssistance,
                         learnMemory = state.keyMemoryEnabled && allowsAssistance
@@ -222,8 +244,55 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
                 if (intent.char.any { it.isLetter() }) viewModel.characterTyped()
                 updateDraftAfterEdit()
             }
+            is KeyboardIntent.GlideTypingPath -> {
+                val state = viewModel.uiState.value
+                val allowsAssistance = InputFieldPolicy.allowsSuggestions(state.inputType)
+                if (state.glideTypingEnabled && allowsAssistance && !state.isSensitiveField) {
+                    currentInputConnection?.let { ic ->
+                        val candidates = typing.glide(
+                            editor = ConnectionEditor(ic),
+                            rawPath = intent.rawKeySequence,
+                            learnMemory = state.keyMemoryEnabled
+                        )
+                        viewModel.characterTyped()
+                        updateDraftAfterEdit()
+                        if (candidates.isNotEmpty() && state.suggestionsEnabled) {
+                            viewModel.updateSuggestions(candidates)
+                        }
+                    }
+                }
+            }
             is KeyboardIntent.KeyCodePress -> {
                 typing.reset()
+                if (intent.primaryCode == KeyEvent.KEYCODE_ENTER && !viewModel.uiState.value.isSensitiveField) {
+                    val ic = currentInputConnection
+                    if (ic != null) {
+                        val editor = ConnectionEditor(ic)
+                        val before = editor.beforeCursor(512)
+                        val latestClip = (application as? NeuralKeyApplication)?.clipboardHistoryManager?.latestClipText()
+                        // 1. Offline macro evaluation on Enter (e.g. /calc (150 * 4) / 2)
+                        val expandedMacro = SlashCommandEngine.evaluateOfflineMacro(before, latestClip)
+                        if (expandedMacro != null && expandedMacro != before) {
+                            editor.batch {
+                                editor.deleteBefore(before.length)
+                                editor.commit(expandedMacro)
+                            }
+                            updateDraftAfterEdit()
+                            return
+                        }
+                        // 2. AI slash command evaluation on Enter (e.g. /email ask team to move sync)
+                        val aiSlash = SlashCommandEngine.parseAISlashCommand(before)
+                        if (aiSlash != null) {
+                            editor.batch {
+                                editor.deleteBefore(before.length)
+                                editor.commit(aiSlash.cleanedDraft)
+                            }
+                            updateDraftAfterEdit()
+                            viewModel.triggerCustomPrompt(aiSlash.aiInstruction, aiSlash.cleanedDraft)
+                            return
+                        }
+                    }
+                }
                 if (intent.primaryCode != KeyEvent.KEYCODE_ENTER || !sendDefaultEditorAction(true)) {
                     sendDownUpKeyEvents(intent.primaryCode)
                 }
@@ -261,6 +330,65 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
                     updateDraftAfterEdit()
                 }
             }
+            is KeyboardIntent.TriggerGhostCompletion -> {
+                val draft = extractCurrentDraft()
+                if (draft.isNotBlank()) {
+                    viewModel.triggerGhostCompletion(draft)
+                }
+            }
+            is KeyboardIntent.OpenClipboardFusion -> {
+                val draft = extractCurrentDraft()
+                viewModel.openClipboardFusion(draft)
+            }
+            is KeyboardIntent.CloseClipboardFusion -> viewModel.closeClipboardFusion()
+            is KeyboardIntent.PasteClipboardItem -> {
+                typing.reset()
+                currentInputConnection?.commitText(intent.text, 1)
+                viewModel.closeClipboardFusion()
+                updateDraftAfterEdit()
+            }
+            is KeyboardIntent.TogglePinClipboardItem -> viewModel.togglePinClipboardItem(intent.id)
+            is KeyboardIntent.DeleteClipboardItem -> viewModel.deleteClipboardItem(intent.id)
+            is KeyboardIntent.ClearUnpinnedClipboard -> viewModel.clearUnpinnedClipboard()
+            is KeyboardIntent.ReplyToClipboardItem -> {
+                val draft = extractCurrentDraft()
+                viewModel.replyToClipboardItem(intent.clipText, draft)
+            }
+            is KeyboardIntent.SummarizeClipboardItem -> viewModel.summarizeClipboardItem(intent.clipText)
+            is KeyboardIntent.TranslateClipboardItem -> viewModel.translateClipboardItem(intent.clipText)
+            is KeyboardIntent.OpenModelArena -> {
+                val draft = extractCurrentDraft()
+                viewModel.openAndRunModelArena(draft)
+            }
+            is KeyboardIntent.CloseModelArena -> viewModel.cancelAIStreaming()
+            is KeyboardIntent.RunModelArena -> {
+                val draft = extractCurrentDraft()
+                viewModel.openAndRunModelArena(
+                    fallbackDraft = draft,
+                    instruction = intent.instruction,
+                    overrideModelAId = intent.modelAId,
+                    overrideModelBId = intent.modelBId
+                )
+            }
+            is KeyboardIntent.CommitArenaWinner -> {
+                commitAIText(intent.text, AICommitAction.REPLACE_DRAFT)
+                viewModel.commitAIResult()
+            }
+            is KeyboardIntent.OpenVoiceAction -> viewModel.openVoiceAction()
+            is KeyboardIntent.CloseVoiceAction -> viewModel.closeVoiceAction()
+            is KeyboardIntent.ProcessVoiceTranscript -> {
+                if (intent.transformMode == VoiceTransformMode.RAW_DICTATION) {
+                    typing.reset()
+                    currentInputConnection?.commitText(intent.transcript.trim() + " ", 1)
+                    viewModel.closeVoiceAction()
+                    updateDraftAfterEdit()
+                } else {
+                    viewModel.processVoiceTranscript(intent.transcript, intent.transformMode)
+                }
+            }
+            is KeyboardIntent.ProcessVoiceAudioWav -> {
+                viewModel.processVoiceAudioWav(intent.base64Wav, intent.transformMode)
+            }
             is KeyboardIntent.HideKeyboard -> requestHideSelf(0)
             is KeyboardIntent.MoveCursor -> {
                 typing.reset()
@@ -290,8 +418,13 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
                 val streamingState =
                     viewModel.uiState.value.mode as? KeyboardMode.AIStreamingMode ?: return
                 if (streamingState.isStreaming || streamingState.error != null || streamingState.streamedText.isBlank()) return
-                if (intent.action != com.supakeyboard.neuralkey.ime.mvi.AICommitAction.COPY_TO_CLIPBOARD &&
-                    extractCurrentDraft() != streamingState.originalText) {
+                val currentEditorText = extractCurrentDraft()
+                if (intent.action != AICommitAction.COPY_TO_CLIPBOARD &&
+                    streamingState.originalText != "[Voice Recording]" &&
+                    !streamingState.originalText.startsWith("COPIED MESSAGE TO REPLY TO:") &&
+                    currentEditorText.isNotBlank() &&
+                    currentEditorText != streamingState.originalText
+                ) {
                     android.widget.Toast.makeText(this, "Text changed. Run the AI action again before applying it.", android.widget.Toast.LENGTH_LONG).show()
                     viewModel.cancelAIStreaming()
                     return
@@ -319,12 +452,12 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
 
     private fun commitAIText(
         text: String,
-        action: com.supakeyboard.neuralkey.ime.mvi.AICommitAction
+        action: AICommitAction
     ) {
         val ic = currentInputConnection ?: return
         typing.reset()
         when (action) {
-            com.supakeyboard.neuralkey.ime.mvi.AICommitAction.REPLACE_DRAFT -> {
+            AICommitAction.REPLACE_DRAFT -> {
                 val selected = ic.getSelectedText(0)
                 if (!selected.isNullOrEmpty()) {
                     ic.commitText(text, 1)
@@ -336,13 +469,14 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
                     ic.commitText(text, 1)
                 }
             }
-            com.supakeyboard.neuralkey.ime.mvi.AICommitAction.INSERT_BELOW -> {
+            AICommitAction.INSERT_BELOW -> {
                 ic.commitText("\n\n$text", 1)
             }
-            com.supakeyboard.neuralkey.ime.mvi.AICommitAction.COPY_TO_CLIPBOARD -> {
+            AICommitAction.COPY_TO_CLIPBOARD -> {
                 val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                 val clip = android.content.ClipData.newPlainText("NeuralKey AI Output", text)
                 clipboard?.setPrimaryClip(clip)
+                viewModel.recordCopiedText(text)
             }
         }
         updateDraftAfterEdit()
@@ -390,17 +524,26 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         }
         val ic = currentInputConnection ?: return
         val editor = ConnectionEditor(ic)
+
+        // 1. Check Slash Command autocomplete (/email, /fix, /calc, /sql, /date, etc.)
+        val beforeSlice = editor.beforeCursor(64)
+        val slashMatches = SlashCommandEngine.suggestCommands(beforeSlice)
+        if (slashMatches.isNotEmpty()) {
+            viewModel.updateSuggestions(slashMatches)
+            return
+        }
+
         val word = typing.currentWord(editor)
         val prevWord = typing.previousWord(editor)
         val engine = (application as NeuralKeyApplication).suggestionEngine
         if (word == null) {
-            // If cursor is immediately after a space following a word, offer contextual next-word predictions
             if (state.nextWordPredictionEnabled && prevWord != null && editor.beforeCursor(1) == " " && engine != null) {
                 suggestionJob = lifecycleScope.launch {
                     val nextWords = withContext(Dispatchers.Default) { engine.nextWordSuggestions(prevWord) }
                     val latest = viewModel.uiState.value
                     if (inputActive && latest.suggestionsEnabled && currentInputConnection === ic &&
-                        typing.currentWord(ConnectionEditor(ic)) == null) {
+                        typing.currentWord(ConnectionEditor(ic)) == null
+                    ) {
                         viewModel.updateSuggestions(nextWords)
                     }
                 }
@@ -409,14 +552,14 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             }
             return
         }
-        // Publish the literal word immediately; compute dictionary + Key Memory matches off the UI thread.
         viewModel.updateSuggestions(listOf(word))
         if (engine == null) return
         suggestionJob = lifecycleScope.launch {
             val words = withContext(Dispatchers.Default) { engine.suggestions(word, prevWord) }
             val latest = viewModel.uiState.value
             if (inputActive && latest.suggestionsEnabled && currentInputConnection === ic &&
-                typing.currentWord(ConnectionEditor(ic)) == word) viewModel.updateSuggestions(words)
+                typing.currentWord(ConnectionEditor(ic)) == word
+            ) viewModel.updateSuggestions(words)
         }
     }
 

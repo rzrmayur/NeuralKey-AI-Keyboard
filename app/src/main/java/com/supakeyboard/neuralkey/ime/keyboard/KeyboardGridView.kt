@@ -4,13 +4,28 @@ import android.view.inputmethod.EditorInfo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -39,12 +54,124 @@ fun KeyboardGridView(
         else -> KeyboardLayouts.symbolsRowsPage2
     }
 
+    var gridRootPosition by remember { mutableStateOf(Offset.Zero) }
+    val characterKeyBounds = remember { mutableStateMapOf<Char, Rect>() }
+    val glideTrailPoints = remember { mutableStateListOf<Offset>() }
+    val glidedChars = remember { mutableStateListOf<Char>() }
+
+    val handleGlideUpdate: (Char, Offset) -> Unit = { startChar, rootPos ->
+        if (glidedChars.isEmpty()) {
+            glidedChars.add(startChar)
+            characterKeyBounds[startChar]?.center?.let { startCenter ->
+                glideTrailPoints.add(startCenter - gridRootPosition)
+            }
+        }
+        val localPoint = rootPos - gridRootPosition
+        glideTrailPoints.add(localPoint)
+        if (glideTrailPoints.size > 44) {
+            glideTrailPoints.removeAt(0)
+        }
+        val hitEntry = characterKeyBounds.entries.firstOrNull { (_, rect) ->
+            rect.contains(rootPos)
+        }
+        if (hitEntry != null && glidedChars.lastOrNull() != hitEntry.key) {
+            glidedChars.add(hitEntry.key)
+        }
+    }
+
+    val handleGlideFinish: () -> Unit = {
+        val path = glidedChars.toList()
+        glidedChars.clear()
+        glideTrailPoints.clear()
+        if (path.size >= 2) {
+            val rawSequence = buildString {
+                path.forEachIndexed { idx, c ->
+                    if (idx == 0 && (uiState.isShifted || uiState.isCapsLocked)) {
+                        append(c.uppercaseChar())
+                    } else {
+                        append(c)
+                    }
+                }
+            }
+            onIntent(KeyboardIntent.GlideTypingPath(rawSequence))
+        }
+    }
+
+    val handleGlideCancel: () -> Unit = {
+        glidedChars.clear()
+        glideTrailPoints.clear()
+    }
+
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Column(
             modifier = modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
-                .padding(horizontal = 2.dp, vertical = 2.dp),
+                .padding(horizontal = 2.dp, vertical = 2.dp)
+                .onGloballyPositioned { coords ->
+                    gridRootPosition = coords.positionInRoot()
+                }
+                .drawWithContent {
+                    drawContent()
+                    if (glideTrailPoints.size >= 2) {
+                        val trailPath = Path().apply {
+                            moveTo(glideTrailPoints.first().x, glideTrailPoints.first().y)
+                            for (i in 1 until glideTrailPoints.size) {
+                                val prev = glideTrailPoints[i - 1]
+                                val curr = glideTrailPoints[i]
+                                quadraticTo(
+                                    prev.x,
+                                    prev.y,
+                                    (prev.x + curr.x) / 2f,
+                                    (prev.y + curr.y) / 2f
+                                )
+                            }
+                            lineTo(glideTrailPoints.last().x, glideTrailPoints.last().y)
+                        }
+                        // Outer neon halo
+                        drawPath(
+                            path = trailPath,
+                            color = theme.accentPrimary.copy(alpha = 0.28f),
+                            style = Stroke(
+                                width = 16.dp.toPx(),
+                                cap = StrokeCap.Round,
+                                join = StrokeJoin.Round
+                            )
+                        )
+                        // Mid neon energy beam
+                        drawPath(
+                            path = trailPath,
+                            color = theme.accentSecondary.copy(alpha = 0.65f),
+                            style = Stroke(
+                                width = 8.dp.toPx(),
+                                cap = StrokeCap.Round,
+                                join = StrokeJoin.Round
+                            )
+                        )
+                        // Inner bright core
+                        drawPath(
+                            path = trailPath,
+                            color = Color.White.copy(alpha = 0.92f),
+                            style = Stroke(
+                                width = 3.2.dp.toPx(),
+                                cap = StrokeCap.Round,
+                                join = StrokeJoin.Round
+                            )
+                        )
+                        // Comet head orb
+                        val head = glideTrailPoints.last()
+                        drawCircle(
+                            color = theme.accentPrimary.copy(alpha = 0.45f),
+                            radius = 10.dp.toPx(),
+                            center = head
+                        )
+                        drawCircle(
+                            color = Color.White,
+                            radius = 4.5.dp.toPx(),
+                            center = head
+                        )
+                    }
+                },
             verticalArrangement = Arrangement.SpaceEvenly
         ) {
             activeLayout.forEach { rowKeys ->
@@ -69,7 +196,14 @@ fun KeyboardGridView(
                             activeModelName = uiState.activeModel?.name,
                             imeAction = uiState.imeAction,
                             theme = theme,
-                            onIntent = onIntent
+                            onIntent = onIntent,
+                            glideTypingEnabled = uiState.glideTypingEnabled && !uiState.isSymbols && !isNumericField && !isPhoneField,
+                            onCharacterKeyBoundsChanged = { ch, rect ->
+                                characterKeyBounds[ch] = rect
+                            },
+                            onGlideUpdate = handleGlideUpdate,
+                            onGlideFinish = handleGlideFinish,
+                            onGlideCancel = handleGlideCancel
                         )
                     }
                 }

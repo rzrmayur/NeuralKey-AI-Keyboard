@@ -44,11 +44,14 @@ import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
 import com.supakeyboard.neuralkey.data.network.SystemPromptBuilder
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
+import com.supakeyboard.neuralkey.ime.persona.AppPersonaEngine
 import com.supakeyboard.neuralkey.ime.theme.KeyboardTheme
 
 /**
  * Intuitive, full-keyboard replacement panel for selecting AI action prompts.
- * Automatically prioritizes Email & Drafts when an email client is detected.
+ * Automatically prioritizes Email & Drafts when an email client is detected,
+ * displays the active Per-App AI Persona, and provides quick launch pills for
+ * Ghost Complete, Model Arena, Smart Clipboard Fusion, and Voice-to-Action.
  */
 @Composable
 fun AIPromptSelectionPanel(
@@ -59,6 +62,9 @@ fun AIPromptSelectionPanel(
 ) {
     val hostCategory = remember(uiState.targetPackageName) {
         SystemPromptBuilder.detectAppCategory(uiState.targetPackageName)
+    }
+    val activePersona = remember(uiState.targetPackageName) {
+        AppPersonaEngine.resolvePersona(uiState.targetPackageName)
     }
     val initialCategory = remember(hostCategory) {
         if (hostCategory == SystemPromptBuilder.HostAppCategory.EMAIL) "Email & Drafts" else "All"
@@ -106,20 +112,23 @@ fun AIPromptSelectionPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.AutoAwesome,
                     contentDescription = null,
                     tint = theme.accentPrimary,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Text(
                     text = "AI Studio",
                     color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false
                 )
 
                 // Model Tag
@@ -127,32 +136,33 @@ fun AIPromptSelectionPanel(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
                         .background(theme.accentPrimary.copy(alpha = 0.2f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
                 ) {
                     Text(
                         text = "⚡ $activeModelName",
                         color = theme.accentPrimary,
-                        fontSize = 10.sp,
+                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                if (hostCategory == SystemPromptBuilder.HostAppCategory.EMAIL) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFF10B981).copy(alpha = 0.2f))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = "✉️ Email Mode",
-                            color = Color(0xFF34D399),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                // Per-App Persona Badge
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF10B981).copy(alpha = 0.2f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = activePersona.badgeLabel,
+                        color = Color(0xFF34D399),
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
 
@@ -176,37 +186,45 @@ fun AIPromptSelectionPanel(
                     text = "Keyboard",
                     color = theme.keyTextColor,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
 
-        // 2. Draft Preview Banner
-        Box(
+        // 2. Futuristic Neural Power Bar (Ghost Complete, Model Arena, Clipboard Fusion, Voice Studio)
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(theme.keyBgColor.copy(alpha = 0.6f))
-                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (hasDraft) {
-                val previewSnippet = uiState.currentDraft.trim().replace("\n", " ")
-                Text(
-                    text = "Selected text: \"${previewSnippet.take(48)}${if (previewSnippet.length > 48) "..." else ""}\"",
-                    fontSize = 11.sp,
-                    color = theme.keySecondaryTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                Text(
-                    text = "💡 Type notes/draft first, then tap an Email or AI tool below",
-                    fontSize = 11.sp,
-                    color = Color(0xFF94A3B8),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            FuturisticPowerPill(
+                label = "🪄 Ghost Complete",
+                accentColor = theme.accentPrimary,
+                theme = theme,
+                onClick = { onIntent(KeyboardIntent.TriggerGhostCompletion) }
+            )
+            FuturisticPowerPill(
+                label = "⚔️ Model Arena",
+                accentColor = Color(0xFFF59E0B),
+                theme = theme,
+                onClick = { onIntent(KeyboardIntent.OpenModelArena) }
+            )
+            FuturisticPowerPill(
+                label = "📋 Clipboard Fusion",
+                accentColor = Color(0xFF38BDF8),
+                theme = theme,
+                onClick = { onIntent(KeyboardIntent.OpenClipboardFusion) }
+            )
+            FuturisticPowerPill(
+                label = "🎙️ Voice Studio",
+                accentColor = Color(0xFFEC4899),
+                theme = theme,
+                onClick = { onIntent(KeyboardIntent.OpenVoiceAction) }
+            )
         }
 
         // 3. Category Filter Tabs
@@ -317,6 +335,33 @@ fun AIPromptSelectionPanel(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FuturisticPowerPill(
+    label: String,
+    accentColor: Color,
+    theme: KeyboardTheme,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(accentColor.copy(alpha = 0.16f))
+            .border(1.dp, accentColor.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 

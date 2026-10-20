@@ -56,6 +56,7 @@ class KeyboardPreferences(private val context: Context) {
     val autoCorrectionEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_AUTO_CORRECTION] ?: true }
     val keyMemoryEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_MEMORY_ENABLED] ?: true }
     val nextWordPredictionEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_NEXT_WORD_PREDICTION] ?: true }
+    val glideTypingEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_GLIDE_TYPING] ?: true }
     val splitKeyboardOnFold: Flow<Boolean> = dataStore.data.map { it[KEY_SPLIT_ON_FOLD] ?: true }
 
     val oneHandedMode: Flow<OneHandedMode> = dataStore.data.map { preferences ->
@@ -67,6 +68,7 @@ class KeyboardPreferences(private val context: Context) {
     suspend fun setAutoCorrectionEnabled(enabled: Boolean) { dataStore.edit { it[KEY_AUTO_CORRECTION] = enabled } }
     suspend fun setKeyMemoryEnabled(enabled: Boolean) { dataStore.edit { it[KEY_MEMORY_ENABLED] = enabled } }
     suspend fun setNextWordPredictionEnabled(enabled: Boolean) { dataStore.edit { it[KEY_NEXT_WORD_PREDICTION] = enabled } }
+    suspend fun setGlideTypingEnabled(enabled: Boolean) { dataStore.edit { it[KEY_GLIDE_TYPING] = enabled } }
     suspend fun setSplitKeyboardOnFold(enabled: Boolean) { dataStore.edit { it[KEY_SPLIT_ON_FOLD] = enabled } }
     suspend fun setOneHandedMode(mode: OneHandedMode) { dataStore.edit { it[KEY_ONE_HANDED_MODE] = mode.name } }
 
@@ -149,6 +151,7 @@ class KeyboardPreferences(private val context: Context) {
         private val KEY_AUTO_CORRECTION = booleanPreferencesKey("auto_correction_enabled")
         private val KEY_MEMORY_ENABLED = booleanPreferencesKey("key_memory_enabled")
         private val KEY_NEXT_WORD_PREDICTION = booleanPreferencesKey("next_word_prediction_enabled")
+        private val KEY_GLIDE_TYPING = booleanPreferencesKey("glide_typing_enabled")
         private val KEY_SPLIT_ON_FOLD = booleanPreferencesKey("split_keyboard_on_fold")
         private val KEY_ONE_HANDED_MODE = stringPreferencesKey("one_handed_mode")
 

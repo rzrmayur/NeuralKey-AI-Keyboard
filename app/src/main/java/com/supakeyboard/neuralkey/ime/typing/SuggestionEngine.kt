@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 class SuggestionEngine(dictionary: List<String>) {
     private val words = (dictionary.map { it.lowercase(Locale.ROOT) } + commonWords + corrections.values).toHashSet()
     private val sortedWords = words.sorted()
+    private val byFirstLetter = sortedWords.groupBy { it.firstOrNull() ?: '\u0000' }
     private val ranks = commonWords.withIndex().associate { it.value to it.index }
 
     // On-device Key Memory (user-typed frequency & contextual next-word bigrams)
@@ -173,6 +174,102 @@ class SuggestionEngine(dictionary: List<String>) {
         // Ambiguous and rare matches remain suggestions for the user to choose.
         val frequent = edits(lower).filter { it in ranks }
         return frequent.singleOrNull()?.let { matchCase(typed, it) }
+    }
+
+    /**
+     * Decodes a continuous Neural Trail Glide / Swipe-to-Type key path (e.g. "helo" or "hrtylo" -> "hello").
+     * Uses anchor start/end characters, ordered subsequence matching, and Key Memory bigram/unigram ranking.
+     */
+    fun decodeGlidePath(rawPath: String, previousWord: String? = null, limit: Int = 3): List<String> {
+        val cleaned = rawPath.filter { it.isLetter() }
+        if (cleaned.length < 2) return emptyList()
+        val isCapitalized = cleaned.first().isUpperCase()
+        val lowerPath = collapseRepeats(cleaned.lowercase(Locale.ROOT))
+        if (lowerPath.length < 2) return emptyList()
+
+        val firstChar = lowerPath.first()
+        val lastChar = lowerPath.last()
+        val prevLower = previousWord?.lowercase(Locale.ROOT)?.takeIf { isWord(it) }
+
+        val bucket = (byFirstLetter[firstChar].orEmpty() + userWords.keys.filter { it.firstOrNull() == firstChar })
+            .distinct()
+
+        val candidates = bucket.filter { word ->
+            word.length in 2..(lowerPath.length + 3) &&
+                (word.last() == lastChar || qwertyNeighbors[lastChar]?.contains(word.last()) == true) &&
+                isGlideSubsequenceMatch(word, lowerPath)
+        }
+
+        val comparator = contextualComparator(lowerPath, prevLower)
+        val ranked = candidates.sortedWith { a, b ->
+            val aExactEnd = if (a.last() == lastChar) 1 else 0
+            val bExactEnd = if (b.last() == lastChar) 1 else 0
+            if (aExactEnd != bExactEnd) return@sortedWith bExactEnd.compareTo(aExactEnd)
+
+            val aRatio = glideMatchScore(a, lowerPath)
+            val bRatio = glideMatchScore(b, lowerPath)
+            if (aRatio != bRatio) return@sortedWith bRatio.compareTo(aRatio)
+
+            comparator.compare(a, b)
+        }.take(limit)
+
+        return ranked.map { candidate ->
+            val customCase = userCustomCasing[candidate]
+            when {
+                isCapitalized -> candidate.replaceFirstChar { it.titlecase(Locale.ROOT) }
+                customCase != null -> customCase
+                else -> candidate
+            }
+        }
+    }
+
+    private fun collapseRepeats(input: String): String {
+        if (input.isEmpty()) return input
+        val sb = StringBuilder(input.length)
+        var prev = '\u0000'
+        for (c in input) {
+            if (c != prev) {
+                sb.append(c)
+                prev = c
+            }
+        }
+        return sb.toString()
+    }
+
+    private fun isGlideSubsequenceMatch(word: String, collapsedPath: String): Boolean {
+        val collapsedWord = collapseRepeats(word)
+        var pathIdx = 0
+        var matched = 0
+        for (wc in collapsedWord) {
+            while (pathIdx < collapsedPath.length && collapsedPath[pathIdx] != wc) {
+                pathIdx++
+            }
+            if (pathIdx < collapsedPath.length) {
+                matched++
+                pathIdx++
+            }
+        }
+        // Allow up to 1 skipped interior letter on longer words while requiring full match on short words
+        val minRequired = if (collapsedWord.length <= 3) collapsedWord.length else collapsedWord.length - 1
+        return matched >= minRequired
+    }
+
+    private fun glideMatchScore(word: String, collapsedPath: String): Int {
+        val collapsedWord = collapseRepeats(word)
+        var pathIdx = 0
+        var exactMatches = 0
+        for (wc in collapsedWord) {
+            while (pathIdx < collapsedPath.length && collapsedPath[pathIdx] != wc) {
+                pathIdx++
+            }
+            if (pathIdx < collapsedPath.length) {
+                exactMatches++
+                pathIdx++
+            }
+        }
+        val completenessBonus = if (exactMatches == collapsedWord.length) 100 else 40
+        val lengthPenalty = kotlin.math.abs(collapsedPath.length - collapsedWord.length) * 5
+        return completenessBonus + (exactMatches * 10) - lengthPenalty
     }
 
     private fun contextualComparator(typedLower: String, prevLower: String?): Comparator<String> {

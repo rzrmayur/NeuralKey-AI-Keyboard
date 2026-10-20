@@ -3,7 +3,7 @@
 # 🧠 NeuralKey AI Keyboard
 ### *100% Free, Open-Source, Zero-Telemetry Intelligent Android IME*
 
-**Built natively with 100% Jetpack Compose • Kotlin 2.1 • Adaptive On-Device Key Memory & N-Gram Predictions • Foldable & One-Handed Postures • Direct OpenRouter SSE Streaming • 32 Email & Productivity AI Tools • 15 Flagship Themes**
+**Built natively with 100% Jetpack Compose • Kotlin 2.1 • Neural Trail Glide Typing • Slash Commands & Offline Math Macros • Multi-Model Arena Split-Compare • Smart Clipboard AI Fusion • Voice-to-Action Studio • Adaptive On-Device Key Memory • Foldable & One-Handed Postures • 15 Flagship Themes**
 
 [![Release](https://img.shields.io/github/v/release/rzrmayur/NeuralKey-AI-Keyboard?style=for-the-badge&logo=android&logoColor=white&label=Latest%20APK&color=10B981)](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest)
 [![CI Status](https://img.shields.io/github/actions/workflow/status/rzrmayur/NeuralKey-AI-Keyboard/android.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Android%20CI)](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/actions)
@@ -19,7 +19,7 @@
 
 <br />
 
-[**⬇️ Download Latest APK (v1.2.0)**](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest) • [**✨ Features**](#-key-capabilities--feature-matrix) • [**🏗️ Architecture**](#️-system-architecture--data-flow) • [**🧠 Key Memory**](#-deep-dive-adaptive-key-memory--offline-scowl-engine) • [**📱 Fold & One-Handed**](#-deep-dive-one-handed-mode--foldable--flip-posture-engine) • [**🔒 Security**](#-defense-in-depth-security--privacy-architecture) • [**🚀 Quick Start**](#-installation--zero-cost-setup-guide)
+[**⬇️ Download Latest APK (v1.3.0)**](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest) • [**🔥 What's New in v1.3.0**](#-whats-new-in-v130--the-futuristic-neural-suite) • [**✨ Features**](#-key-capabilities--feature-matrix) • [**🏗️ Architecture**](#️-system-architecture--data-flow) • [**🧠 Key Memory**](#-deep-dive-adaptive-key-memory--offline-scowl-engine) • [**📱 Fold & One-Handed**](#-deep-dive-one-handed-mode--foldable--flip-posture-engine) • [**🔒 Security**](#-defense-in-depth-security--privacy-architecture) • [**🚀 Quick Start**](#-installation--zero-cost-setup-guide)
 
 </div>
 
@@ -28,7 +28,7 @@
 ## 📑 Table of Contents
 
 1. [🌍 Free-for-All Manifesto (Why NeuralKey Exists)](#-free-for-all-manifesto)
-2. [🔥 What's New in v1.2.0](#-whats-new-in-v120)
+2. [🔥 What's New in v1.3.0 — The Futuristic Neural Suite](#-whats-new-in-v130--the-futuristic-neural-suite)
 3. [⚡ Key Capabilities & Competitive Matrix](#-key-capabilities--feature-matrix)
 4. [🏗️ System Architecture & Unidirectional Data Flow](#️-system-architecture--data-flow)
 5. [🧠 Deep Dive: Context-Aware AI Engine, Email Suite & SSE Streaming](#-deep-dive-context-aware-ai-engine-email-suite--sse-streaming)
@@ -60,10 +60,30 @@ Most commercial "AI keyboards" on mobile stores charge **$9.99–$19.99/month**,
 
 ---
 
-## 🔥 What's New in v1.2.0
+## 🔥 What's New in v1.3.0 — The Futuristic Neural Suite
 
-See full release notes in [`docs/releases/v1.2.0.md`](docs/releases/v1.2.0.md), [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md), and [`docs/releases/v1.1.0.md`](docs/releases/v1.1.0.md).
+See full release notes in [`docs/releases/v1.3.0.md`](docs/releases/v1.3.0.md), [`docs/releases/v1.2.0.md`](docs/releases/v1.2.0.md), [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md), and [`docs/releases/v1.1.0.md`](docs/releases/v1.1.0.md).
 
+- **🪄 Ghost-Text Inline AI Autocomplete & Per-App AI Personas (`AppPersonaEngine`):**
+  - Automatically detects the active foreground app and adapts AI tone, formatting, and Ghost-Text sentence completion across **6 specialized personas**: `✉️ Email Mode` (Gmail/Outlook), `💬 Chat Mode` (WhatsApp/Telegram/Signal/Discord), `💼 Workspace Mode` (Slack/Teams/Notion), `💻 Dev Mode` (GitHub/Termux/IDEs), `🔥 Social Mode` (X/LinkedIn/Reddit), and `🧠 Universal AI`.
+  - Tap **`🪄 Ghost Complete`** in AI Studio to seamlessly finish your unfinished sentence or paragraph inline while preserving your exact opening words.
+- **⚡ Neural Trail Glide / Swipe-to-Type (`SuggestionEngine.decodeGlidePath` & `KeyboardGridView`):**
+  - Slide your finger continuously across character keys to decode full words **100% offline** using anchor start/end matching, ordered subsequence scoring, QWERTY spatial adjacency, and your personal **Key Memory** unigrams/bigrams.
+  - Renders a multi-layered glowing neon comet trail (`outer halo` + `mid energy beam` + `inner white core` + `comet head orb`) dynamically tinted to your active theme's primary and secondary accents.
+- **📋 Smart Clipboard Time-Machine & AI Context Fusion (`ClipboardHistoryManager` & `ClipboardFusionPanel`):**
+  - Stores up to 25 recent non-sensitive clipboard items on-device (respecting Android 13+ `EXTRA_IS_SENSITIVE` so passwords are never captured) with 1-tap **Pin**, **Delete**, and **Clear Unpinned**.
+  - **1-Tap AI Context Fusion (`💬 AI Reply`):** Combines a copied incoming message from your clipboard with your current draft notes to write a complete, context-aware reply—plus 1-tap **📝 TL;DR** and **🌐 Translate** on any clip.
+- **⚔️ Multi-Model Arena Split-Compare (`ArenaComparePanel`):**
+  - Streams **2 OpenRouter LLMs side-by-side in parallel** inside the keyboard, displaying live token generation, per-model latency (`ms`), and 1-tap **`✓ Use Model A` / `✓ Use Model B`** winner selection.
+- **💻 In-Keyboard Slash Commands & Dynamic Offline Macros (`SlashCommandEngine`):**
+  - **Zero-Latency Offline Macros (on `Space` or `Enter`):** `/calc <math>` (safe recursive-descent math parser supporting `+ - * / % ^` and parentheses, e.g., `/calc (12+8)*3.5` $\rightarrow$ `70`), `/date`, `/time`, `/datetime`, `/clip`, `/shrug` (`¯\_(ツ)_/¯`), and `/tableflip`.
+  - **Instant AI Slash Commands:** Type `/email`, `/fix`, `/tldr`, `/polite`, `/sql`, `/regex`, `/code`, or `/translate` before or after your text and press `Space` or `Enter` to trigger instant AI streaming—with live slash-command autocomplete in the suggestion bar as soon as you type `/`.
+- **🎙️ Whisper / Multimodal Voice-to-Action Studio (`VoiceToActionPanel`):**
+  - Speak messy thoughts via Android `SpeechRecognizer` or OpenRouter `input_audio` WAV streaming (`google/gemini-2.5-flash`, `google/gemini-2.0-flash-001`, `google/gemini-2.0-flash-lite-001`) and transform them into **`✨ Smart Polish`**, **`✉️ Voice → Email`**, **`📋 Voice → Bullets`**, or **`🌐 Voice → English`**.
+- **🛡️ Hardened OpenRouter Error Diagnostics & Automatic Free-Tier Recovery (`OpenRouterApiClient` & `OpenRouterRepository`):**
+  - Detailed, actionable HTTP status diagnostics (`400`, `401/403`, `402`, `404`, `408`, `429`, `5xx`) + automatic fallback to `openrouter/free` if a primary model is rate-limited or out of credits.
+
+### Previous Highlights (`v1.2.0`)
 - **🧠 Adaptive On-Device Key Memory & N-Gram Next-Word Predictions (`KeyMemoryStore` + `SuggestionEngine`):**
   - Automatically learns your personal vocabulary, custom names/jargon, preferred capitalization, and contextual word-to-word transitions (`previousWord -> nextWord`) 100% offline.
   - Predicts the **top 3 likely next words** immediately after pressing Space, and boosts QWERTY spatially adjacent typo fixes.
@@ -351,7 +371,7 @@ NeuralKey includes **15 instant-switching themes** with zero-restart reactivity 
 ## 🚀 Installation & Zero-Cost Setup Guide
 
 ### Step 1: Download & Install the APK
-1. Go to the [**GitHub Releases Page**](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest) and download `NeuralKey-AI-Keyboard-v1.2.0.apk`.
+1. Go to the [**GitHub Releases Page**](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest) and download `NeuralKey-AI-Keyboard-v1.3.0.apk`.
 2. Verify the download integrity against `SHA256SUMS.txt` if desired:
    ```bash
    sha256sum -c SHA256SUMS.txt
@@ -395,7 +415,9 @@ cd NeuralKey-AI-Keyboard
 | [`TypingControllerTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/typing/TypingControllerTest.kt) | `TypingController.kt` | Word composition tracking, spacebar replacement, single-backspace undo restoration, next-word selection after space, and bigram learning. |
 | [`InputFieldPolicyTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/typing/InputFieldPolicyTest.kt) | `InputFieldPolicy.kt` | Bitmask isolation for text/web/visible/numeric passwords, URIs, email fields, and `FLAG_NO_SUGGESTIONS`. |
 | [`ImeInsetsHostTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/ui/ImeInsetsHostTest.kt) | `ImeInsetsHost.kt` | Native View inset reconciliation across API 30 & 35, delayed caption-bar delivery, consumed child insets, and side cutouts. |
-| [`KeyboardLayoutTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/ui/KeyboardLayoutTest.kt) | `KeyboardRootView.kt` | 48dp command bar stability, One-Handed mode compacting & side-switching, Foldable (`w673dp-h841dp`) split layout with dual spacebars, Flip cover (`h400dp`) compact posture, 15 themes, and 32 AI prompts. |
+| [`KeyboardLayoutTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/ui/KeyboardLayoutTest.kt) | `KeyboardRootView.kt` | 48dp command bar stability, One-Handed mode compacting & side-switching, Foldable (`w673dp-h841dp`) split layout with dual spacebars, Flip cover (`h400dp`) compact posture, 15 themes, 32 AI prompts, and height-locked `ClipboardFusionMode`, `ArenaCompareMode`, & `VoiceActionMode` overlays. |
+| [`FuturisticFeaturesTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/FuturisticFeaturesTest.kt) | `SlashCommandEngine.kt` / `AppPersonaEngine.kt` / `ClipboardHistoryManager.kt` / `OpenRouterApiClient.kt` | Offline `/calc` math parser, `/date`/`/shrug`/`/clip` macros, `/email`/`/sql` AI slash commands, Neural Trail Glide decoding, Per-App AI Persona auto-detection, Clipboard Context Fusion, and OpenRouter HTTP error diagnostics (`401`/`402`/`429`/`503`). |
+| [`SettingsDashboardLayoutTest`](app/src/test/java/com/supakeyboard/neuralkey/ui/settings/SettingsDashboardLayoutTest.kt) | `SettingsActivity.kt` | Verifies single-line horizontal header badge (`Setup Needed`, `v1.3 FREE`) and tab layout bounds on compact `w360dp-h780dp` screens across all 5 tabs. |
 
 ---
 

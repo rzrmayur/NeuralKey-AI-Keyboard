@@ -39,8 +39,26 @@ class KeyboardLayoutTest {
         val firstKey = compose.onNodeWithContentDescription("q").getUnclippedBoundsInRoot()
         // One 48dp toolbar, then the first key (including its normal key gutter).
         assertTrue(firstKey.top - root.top < 58.dp)
-        for (mode in listOf(KeyboardMode.AIMenuMode("hello"), KeyboardMode.ModelPickerMode(),
-            KeyboardMode.AIStreamingMode("hello", "world", false))) {
+        for (mode in listOf(
+            KeyboardMode.AIMenuMode("hello"),
+            KeyboardMode.ModelPickerMode(),
+            KeyboardMode.AIStreamingMode("hello", "world", false),
+            KeyboardMode.ClipboardFusionMode(),
+            KeyboardMode.ArenaCompareMode(
+                originalText = "hello",
+                modelAId = "google/gemini-2.5-flash",
+                modelAName = "Gemini 2.5 Flash",
+                modelAText = "Option A",
+                modelAStreaming = false,
+                modelBId = "openrouter/free",
+                modelBName = "OpenRouter Free",
+                modelBText = "Option B",
+                modelBStreaming = false
+            ),
+            KeyboardMode.VoiceActionMode(
+                transcriptDraft = "Remind team about deployment at 4pm"
+            )
+        )) {
             compose.runOnIdle { state.value = state.value.copy(mode = mode) }
             assertEquals((root.bottom - root.top).value, compose.onNodeWithTag("root").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }, 0.1f)
         }
@@ -178,5 +196,35 @@ class KeyboardLayoutTest {
         val prompts = UserPromptEntity.defaultPrompts()
         assertEquals(32, prompts.size)
         assertTrue(prompts.any { it.category == "Email & Drafts" && it.title.contains("Cold Outreach") })
+    }
+
+    @Test fun futuristicPanelsDispatchExpectedIntents() {
+        val intents = mutableListOf<KeyboardIntent>()
+        val state = mutableStateOf(
+            KeyboardUiState(
+                mode = KeyboardMode.ArenaCompareMode(
+                    originalText = "draft text",
+                    modelAId = "model-a",
+                    modelAName = "Model Alpha",
+                    modelAText = "Polished Alpha Result",
+                    modelAStreaming = false,
+                    modelALatencyMs = 420L,
+                    modelBId = "model-b",
+                    modelBName = "Model Beta",
+                    modelBText = "Polished Beta Result",
+                    modelBStreaming = false,
+                    modelBLatencyMs = 510L
+                )
+            )
+        )
+        compose.setContent {
+            MaterialTheme {
+                KeyboardRootView(state.value, intents::add)
+            }
+        }
+        compose.onNodeWithText("Polished Alpha Result").assertIsDisplayed()
+        compose.onNodeWithText("Polished Beta Result").assertIsDisplayed()
+        compose.onNodeWithText("✓ Use Model A").performClick()
+        assertTrue(KeyboardIntent.CommitArenaWinner("Polished Alpha Result", "model-a") in intents)
     }
 }

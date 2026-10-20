@@ -38,6 +38,7 @@ class SettingsDashboardLayoutTest {
     fun tearDown() {
         OpenRouterRepository.resetInstance()
         NeuralKeyDatabase.resetInstance()
+        com.supakeyboard.neuralkey.ime.clipboard.ClipboardHistoryManager.resetInstance()
     }
 
     private fun SemanticsNodeInteraction.assertSingleLineText(label: String) {
@@ -87,11 +88,11 @@ class SettingsDashboardLayoutTest {
         composeRule.onNodeWithText("Setup Needed", useUnmergedTree = true)
             .assertSingleLineText("Setup Needed")
 
-        // 2. Verify "NeuralKey AI" and "v1.2 FREE" render on a single line without wrapping
+        // 2. Verify "NeuralKey AI" and "v1.3 FREE" render on a single line without wrapping
         composeRule.onNodeWithText("NeuralKey AI", useUnmergedTree = true)
             .assertSingleLineText("NeuralKey AI")
-        composeRule.onNodeWithText("v1.2 FREE", useUnmergedTree = true)
-            .assertSingleLineText("v1.2 FREE")
+        composeRule.onNodeWithText("v1.3 FREE", useUnmergedTree = true)
+            .assertSingleLineText("v1.3 FREE")
 
         // 3. Verify all 5 tabs are displayed, evenly sized, and single-line
         val tabLabels = listOf("Setup", "Typing", "AI Tools", "Models", "Themes")

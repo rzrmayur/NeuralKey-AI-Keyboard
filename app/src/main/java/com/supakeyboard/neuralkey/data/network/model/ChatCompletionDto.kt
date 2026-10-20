@@ -29,6 +29,50 @@ data class ChatMessageDto(
     val content: String
 )
 
+/**
+ * Multimodal request supporting OpenRouter's `input_audio` content blocks
+ * for audio-capable models (e.g., google/gemini-2.5-flash, google/gemini-2.0-flash-001, openai/gpt-4o-audio-preview).
+ */
+@Serializable
+data class MultimodalChatCompletionRequest(
+    @SerialName("models")
+    val models: List<String>,
+    @SerialName("messages")
+    val messages: List<MultimodalChatMessageDto>,
+    @SerialName("stream")
+    val stream: Boolean = true,
+    @SerialName("provider")
+    val provider: ProviderRoutingDto? = ProviderRoutingDto(sort = "latency", allowFallbacks = true),
+    @SerialName("temperature")
+    val temperature: Double? = 0.4
+)
+
+@Serializable
+data class MultimodalChatMessageDto(
+    @SerialName("role")
+    val role: String,
+    @SerialName("content")
+    val content: List<MultimodalContentPartDto>
+)
+
+@Serializable
+data class MultimodalContentPartDto(
+    @SerialName("type")
+    val type: String,
+    @SerialName("text")
+    val text: String? = null,
+    @SerialName("input_audio")
+    val inputAudio: InputAudioPayloadDto? = null
+)
+
+@Serializable
+data class InputAudioPayloadDto(
+    @SerialName("data")
+    val data: String,
+    @SerialName("format")
+    val format: String = "wav"
+)
+
 @Serializable
 data class ProviderRoutingDto(
     @SerialName("sort")
@@ -44,7 +88,9 @@ data class ChatCompletionChunkDto(
     @SerialName("model")
     val model: String? = null,
     @SerialName("choices")
-    val choices: List<ChunkChoiceDto> = emptyList()
+    val choices: List<ChunkChoiceDto> = emptyList(),
+    @SerialName("error")
+    val error: OpenRouterErrorDetailDto? = null
 )
 
 @Serializable
@@ -63,4 +109,18 @@ data class ChunkDeltaDto(
     val content: String? = null,
     @SerialName("role")
     val role: String? = null
+)
+
+@Serializable
+data class OpenRouterErrorResponseDto(
+    @SerialName("error")
+    val error: OpenRouterErrorDetailDto? = null
+)
+
+@Serializable
+data class OpenRouterErrorDetailDto(
+    @SerialName("code")
+    val code: Int? = null,
+    @SerialName("message")
+    val message: String? = null
 )

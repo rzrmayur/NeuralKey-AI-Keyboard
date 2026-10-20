@@ -208,6 +208,46 @@ fun KeyboardRootView(
                     )
                 }
             }
+            is KeyboardMode.ClipboardFusionMode -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(totalPanelHeight)
+                ) {
+                    ClipboardFusionPanel(
+                        uiState = uiState,
+                        theme = resolvedTheme,
+                        onIntent = onIntent
+                    )
+                }
+            }
+            is KeyboardMode.ArenaCompareMode -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(totalPanelHeight)
+                ) {
+                    ArenaComparePanel(
+                        arenaMode = uiState.mode as KeyboardMode.ArenaCompareMode,
+                        theme = resolvedTheme,
+                        onIntent = onIntent
+                    )
+                }
+            }
+            is KeyboardMode.VoiceActionMode -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(totalPanelHeight)
+                ) {
+                    VoiceToActionPanel(
+                        voiceMode = uiState.mode as KeyboardMode.VoiceActionMode,
+                        uiState = uiState,
+                        theme = resolvedTheme,
+                        onIntent = onIntent
+                    )
+                }
+            }
         }
     }
 }

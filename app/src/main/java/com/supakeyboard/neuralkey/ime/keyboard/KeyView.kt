@@ -6,14 +6,12 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -24,21 +22,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.supakeyboard.neuralkey.ime.haptics.HapticManager
@@ -48,7 +51,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import kotlin.math.sign
 
 @Composable
 fun RowScope.KeyView(
@@ -60,7 +62,12 @@ fun RowScope.KeyView(
     activeModelName: String?,
     imeAction: Int,
     theme: com.supakeyboard.neuralkey.ime.theme.KeyboardTheme,
-    onIntent: (KeyboardIntent) -> Unit
+    onIntent: (KeyboardIntent) -> Unit,
+    glideTypingEnabled: Boolean = true,
+    onCharacterKeyBoundsChanged: ((Char, Rect) -> Unit)? = null,
+    onGlideUpdate: ((Char, Offset) -> Unit)? = null,
+    onGlideFinish: (() -> Unit)? = null,
+    onGlideCancel: (() -> Unit)? = null
 ) {
     if (key.type == KeyType.SPACER) {
         androidx.compose.foundation.layout.Spacer(
@@ -77,6 +84,7 @@ fun RowScope.KeyView(
 
     var isPressed by remember { mutableStateOf(false) }
     var backspaceJob by remember { mutableStateOf<Job?>(null) }
+    var keyRootPosition by remember { mutableStateOf(Offset.Zero) }
 
     // Spacebar cursor trackpad drag accumulator
     var accumulatedDragX by remember { mutableFloatStateOf(0f) }
@@ -89,6 +97,9 @@ fun RowScope.KeyView(
     )
 
     val displayText = key.getDisplayText(isShifted, isCapsLocked)
+    val isAlphabeticKey = key.type == KeyType.CHARACTER &&
+        key.primaryText.length == 1 &&
+        key.primaryText[0].isLetter()
 
     // Dynamic background colors from active theme
     val keyBgColor = when {
@@ -115,6 +126,11 @@ fun RowScope.KeyView(
     val latestHaptics by rememberUpdatedState(hapticEnabled)
     val latestIntensity by rememberUpdatedState(hapticIntensity)
     val latestDisplay by rememberUpdatedState(displayText)
+    val latestGlideEnabled by rememberUpdatedState(glideTypingEnabled)
+    val latestGlideUpdate by rememberUpdatedState(onGlideUpdate)
+    val latestGlideFinish by rememberUpdatedState(onGlideFinish)
+    val latestGlideCancel by rememberUpdatedState(onGlideCancel)
+
     val activate: () -> Unit = {
         when (key.type) {
             KeyType.CHARACTER -> latestIntent(KeyboardIntent.KeyPress(latestDisplay))
@@ -137,6 +153,15 @@ fun RowScope.KeyView(
             .weight(key.weight)
             .fillMaxHeight()
             .padding(horizontal = 2.5.dp, vertical = 3.5.dp)
+            .onGloballyPositioned { coords ->
+                keyRootPosition = coords.positionInRoot()
+                if (isAlphabeticKey) {
+                    onCharacterKeyBoundsChanged?.invoke(
+                        key.primaryText[0].lowercaseChar(),
+                        coords.boundsInRoot()
+                    )
+                }
+            }
             .scale(scale)
             .clip(RoundedCornerShape(8.dp))
             .background(keyBgColor)
@@ -157,6 +182,7 @@ fun RowScope.KeyView(
                     isPressed = true
                     var released = false
                     var wasDragged = false
+                    var wasGlided = false
                     accumulatedDragX = 0f
                     try {
                         hapticManager.performKeyTap(view, latestHaptics, latestIntensity)
@@ -193,15 +219,37 @@ fun RowScope.KeyView(
                                     hapticManager.performCursorTick(view, latestHaptics)
                                 }
                                 change.consume()
-                            } else if (change.position.x !in 0f..size.width.toFloat() ||
-                                change.position.y !in 0f..size.height.toFloat()) break
+                            } else {
+                                val outsideKey = change.position.x !in 0f..size.width.toFloat() ||
+                                    change.position.y !in 0f..size.height.toFloat()
+                                if (outsideKey || wasGlided) {
+                                    if (isAlphabeticKey && latestGlideEnabled && latestGlideUpdate != null) {
+                                        wasGlided = true
+                                        isPressed = false
+                                        val rootPos = keyRootPosition + change.position
+                                        latestGlideUpdate?.invoke(key.primaryText[0].lowercaseChar(), rootPos)
+                                        change.consume()
+                                    } else {
+                                        break
+                                    }
+                                }
+                            }
                         }
-                        if (released && !wasDragged && key.type != KeyType.BACKSPACE) latestActivate()
+                        if (released) {
+                            if (wasGlided) {
+                                latestGlideFinish?.invoke()
+                            } else if (!wasDragged && key.type != KeyType.BACKSPACE) {
+                                latestActivate()
+                            }
+                        }
                     } finally {
                         // Also runs on ACTION_CANCEL, navigation, mode changes and disposal.
                         isPressed = false
                         backspaceJob?.cancel()
                         backspaceJob = null
+                        if (wasGlided && !released) {
+                            latestGlideCancel?.invoke()
+                        }
                     }
                 }
             },

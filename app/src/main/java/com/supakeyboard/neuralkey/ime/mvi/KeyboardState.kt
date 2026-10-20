@@ -4,12 +4,42 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.supakeyboard.neuralkey.data.db.entity.OpenRouterModelEntity
 import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
+import com.supakeyboard.neuralkey.ime.clipboard.ClipboardItem
 
 @Immutable
 enum class OneHandedMode {
     OFF,
     LEFT,
     RIGHT
+}
+
+@Immutable
+enum class VoiceTransformMode(val label: String, val emoji: String, val instruction: String) {
+    SMART_POLISH(
+        label = "Smart Polish",
+        emoji = "✨",
+        instruction = "Transform this spoken voice dictation into clean, well-punctuated, natural prose while removing filler words (um, uh, like)."
+    ),
+    VOICE_TO_EMAIL(
+        label = "Voice → Email",
+        emoji = "✉️",
+        instruction = "Transform these spoken voice notes into a complete, polite, well-structured professional email ready to send."
+    ),
+    VOICE_TO_BULLETS(
+        label = "Voice → Bullets",
+        emoji = "📋",
+        instruction = "Distill these spoken thoughts into a crisp, scannable list of actionable bullet points."
+    ),
+    VOICE_TO_ENGLISH(
+        label = "Voice → English",
+        emoji = "🌐",
+        instruction = "Translate and polish this spoken input into fluent, natural English."
+    ),
+    RAW_DICTATION(
+        label = "Raw Text",
+        emoji = "✍️",
+        instruction = ""
+    )
 }
 
 /**
@@ -57,6 +87,45 @@ sealed interface KeyboardMode {
         val searchQuery: String = "",
         val freeOnly: Boolean = false
     ) : KeyboardMode
+
+    /**
+     * Smart Clipboard Time-Machine & AI Context Fusion panel.
+     */
+    @Immutable
+    data class ClipboardFusionMode(
+        val draftText: String = ""
+    ) : KeyboardMode
+
+    /**
+     * Multi-Model Arena Split-Compare: streams 2 OpenRouter models side-by-side in parallel.
+     */
+    @Immutable
+    data class ArenaCompareMode(
+        val originalText: String,
+        val instruction: String = "Polish, improve clarity, and make this text shine.",
+        val modelAId: String,
+        val modelAName: String,
+        val modelAText: String = "",
+        val modelAStreaming: Boolean = true,
+        val modelALatencyMs: Long = 0L,
+        val modelAError: String? = null,
+        val modelBId: String,
+        val modelBName: String,
+        val modelBText: String = "",
+        val modelBStreaming: Boolean = true,
+        val modelBLatencyMs: Long = 0L,
+        val modelBError: String? = null
+    ) : KeyboardMode
+
+    /**
+     * Whisper / Multimodal Voice-to-Action studio panel.
+     */
+    @Immutable
+    data class VoiceActionMode(
+        val selectedTransform: VoiceTransformMode = VoiceTransformMode.SMART_POLISH,
+        val transcriptDraft: String = "",
+        val statusMessage: String? = null
+    ) : KeyboardMode
 }
 
 @Immutable
@@ -75,6 +144,8 @@ sealed interface KeyboardIntent {
     data class KeyCodePress(val primaryCode: Int) : KeyboardIntent
     data class TextCommit(val text: String) : KeyboardIntent
     data class SelectSuggestion(val word: String) : KeyboardIntent
+    data class GlideTypingPath(val rawKeySequence: String) : KeyboardIntent
+    object TriggerGhostCompletion : KeyboardIntent
     object HideKeyboard : KeyboardIntent
     object DeleteBackwards : KeyboardIntent
     data class AcceleratedDelete(val isWordMode: Boolean) : KeyboardIntent
@@ -97,6 +168,23 @@ sealed interface KeyboardIntent {
     data class SetOneHandedMode(val mode: OneHandedMode) : KeyboardIntent
     object CycleOneHandedMode : KeyboardIntent
     object ToggleSplitLayout : KeyboardIntent
+    object OpenClipboardFusion : KeyboardIntent
+    object CloseClipboardFusion : KeyboardIntent
+    data class PasteClipboardItem(val text: String) : KeyboardIntent
+    data class TogglePinClipboardItem(val id: Long) : KeyboardIntent
+    data class DeleteClipboardItem(val id: Long) : KeyboardIntent
+    object ClearUnpinnedClipboard : KeyboardIntent
+    data class ReplyToClipboardItem(val clipText: String) : KeyboardIntent
+    data class SummarizeClipboardItem(val clipText: String) : KeyboardIntent
+    data class TranslateClipboardItem(val clipText: String) : KeyboardIntent
+    object OpenModelArena : KeyboardIntent
+    object CloseModelArena : KeyboardIntent
+    data class RunModelArena(val instruction: String, val modelAId: String, val modelBId: String) : KeyboardIntent
+    data class CommitArenaWinner(val text: String, val winningModelId: String) : KeyboardIntent
+    object OpenVoiceAction : KeyboardIntent
+    object CloseVoiceAction : KeyboardIntent
+    data class ProcessVoiceTranscript(val transcript: String, val transformMode: VoiceTransformMode) : KeyboardIntent
+    data class ProcessVoiceAudioWav(val base64Wav: String, val transformMode: VoiceTransformMode) : KeyboardIntent
     data class UpdateTargetContext(val packageName: String?, val inputType: Int, val imeAction: Int) : KeyboardIntent
     data class DraftChanged(val draftText: String) : KeyboardIntent
 }
@@ -111,6 +199,7 @@ data class KeyboardUiState(
     val pinnedModels: List<OpenRouterModelEntity> = emptyList(),
     val availableModels: List<OpenRouterModelEntity> = emptyList(),
     val userPrompts: List<UserPromptEntity> = emptyList(),
+    val clipboardItems: List<ClipboardItem> = emptyList(),
     val currentDraft: String = "",
     val targetPackageName: String? = null,
     val imeAction: Int = android.view.inputmethod.EditorInfo.IME_ACTION_UNSPECIFIED,
@@ -128,6 +217,7 @@ data class KeyboardUiState(
     val autoCorrectionEnabled: Boolean = true,
     val keyMemoryEnabled: Boolean = true,
     val nextWordPredictionEnabled: Boolean = true,
+    val glideTypingEnabled: Boolean = true,
     val oneHandedMode: OneHandedMode = OneHandedMode.OFF,
     val splitKeyboardOnFold: Boolean = true,
     val isSensitiveField: Boolean = false,

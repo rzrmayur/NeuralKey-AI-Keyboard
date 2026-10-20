@@ -1,15 +1,19 @@
 package com.supakeyboard.neuralkey.ime
 
 import android.app.Application
+import android.os.SystemClock
 import android.util.Log
 import android.view.inputmethod.EditorInfo
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.supakeyboard.neuralkey.NeuralKeyApplication
 import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
+import com.supakeyboard.neuralkey.ime.clipboard.ClipboardHistoryManager
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
 import com.supakeyboard.neuralkey.ime.mvi.OneHandedMode
+import com.supakeyboard.neuralkey.ime.mvi.VoiceTransformMode
+import com.supakeyboard.neuralkey.ime.persona.AppPersonaEngine
 import com.supakeyboard.neuralkey.ime.theme.KeyboardThemes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -35,15 +39,19 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
     }
     private val repository get() = app?.openRouterRepository
     private val preferences get() = app?.keyboardPreferences
+    private val clipboardManager get() = app?.clipboardHistoryManager
 
     private val _uiState = MutableStateFlow(KeyboardUiState())
     val uiState: StateFlow<KeyboardUiState> = _uiState.asStateFlow()
 
     private var streamingJob: Job? = null
+    private var arenaJobA: Job? = null
+    private var arenaJobB: Job? = null
 
     init {
         val repo = repository
         val prefs = preferences
+        val clipMgr = clipboardManager
         if (repo != null && prefs != null) {
             viewModelScope.launch {
                 prefs.suggestionsEnabled.collect { enabled ->
@@ -58,13 +66,18 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
             viewModelScope.launch {
                 prefs.keyMemoryEnabled.collect { enabled ->
                     _uiState.update { it.copy(keyMemoryEnabled = enabled) }
-                    runCatching { com.supakeyboard.neuralkey.NeuralKeyApplication.instance.suggestionEngine?.keyMemoryEnabled = enabled }
+                    runCatching { NeuralKeyApplication.instance.suggestionEngine?.keyMemoryEnabled = enabled }
                 }
             }
             viewModelScope.launch {
                 prefs.nextWordPredictionEnabled.collect { enabled ->
                     _uiState.update { it.copy(nextWordPredictionEnabled = enabled) }
-                    runCatching { com.supakeyboard.neuralkey.NeuralKeyApplication.instance.suggestionEngine?.nextWordPredictionEnabled = enabled }
+                    runCatching { NeuralKeyApplication.instance.suggestionEngine?.nextWordPredictionEnabled = enabled }
+                }
+            }
+            viewModelScope.launch {
+                prefs.glideTypingEnabled.collect { enabled ->
+                    _uiState.update { it.copy(glideTypingEnabled = enabled) }
                 }
             }
             viewModelScope.launch {
@@ -77,7 +90,13 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                     _uiState.update { it.copy(splitKeyboardOnFold = split) }
                 }
             }
-            // Use individual launch/collect for robustness — avoids fragile chained combine
+            if (clipMgr != null) {
+                viewModelScope.launch {
+                    clipMgr.items.collect { items ->
+                        _uiState.update { it.copy(clipboardItems = items) }
+                    }
+                }
+            }
             viewModelScope.launch {
                 repo.activeModel.collect { model ->
                     _uiState.update { it.copy(activeModel = model) }
@@ -143,16 +162,28 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun onAppSwitch(targetPackage: String?) {
-        // Editor content and AI requests must never survive a focus/app change.
         cancelAIStreaming()
         _uiState.update {
-            it.copy(targetPackageName = targetPackage, currentDraft = "", suggestions = emptyList(),
-                isShifted = false, isCapsLocked = false, isSymbols = false, isSymbolsPage2 = false)
+            it.copy(
+                targetPackageName = targetPackage,
+                currentDraft = "",
+                suggestions = emptyList(),
+                isShifted = false,
+                isCapsLocked = false,
+                isSymbols = false,
+                isSymbolsPage2 = false
+            )
         }
     }
 
-    fun updateSuggestions(words: List<String>) { _uiState.update { it.copy(suggestions = words) } }
-    fun setSensitiveField(sensitive: Boolean) { _uiState.update { it.copy(isSensitiveField = sensitive) } }
+    fun updateSuggestions(words: List<String>) {
+        _uiState.update { it.copy(suggestions = words) }
+    }
+
+    fun setSensitiveField(sensitive: Boolean) {
+        _uiState.update { it.copy(isSensitiveField = sensitive) }
+    }
+
     fun characterTyped() {
         _uiState.update { if (it.isCapsLocked) it else it.copy(isShifted = false) }
     }
@@ -161,7 +192,7 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
 
     private var lastShiftTap = 0L
     fun toggleShift() {
-        val now = android.os.SystemClock.uptimeMillis()
+        val now = SystemClock.uptimeMillis()
         _uiState.update {
             when {
                 it.isCapsLocked -> it.copy(isShifted = false, isCapsLocked = false)
@@ -225,6 +256,265 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
         startAIStreaming(customInstruction, draft)
     }
 
+    /**
+     * Triggers Ghost-Text Inline AI Completion tailored to the active app's persona.
+     */
+    fun triggerGhostCompletion(fallbackDraft: String) {
+        val draft = _uiState.value.currentDraft.ifBlank { fallbackDraft }
+        val instruction = AppPersonaEngine.buildGhostCompletionInstruction(_uiState.value.targetPackageName)
+        startAIStreaming(instruction, draft)
+    }
+
+    // ── Smart Clipboard Time-Machine & AI Context Fusion ────────────
+
+    fun openClipboardFusion(draft: String) {
+        clipboardManager?.syncFromSystemClipboard()
+        _uiState.update {
+            it.copy(
+                currentDraft = draft,
+                mode = KeyboardMode.ClipboardFusionMode(draftText = draft)
+            )
+        }
+    }
+
+    fun closeClipboardFusion() {
+        _uiState.update { it.copy(mode = KeyboardMode.TypingMode()) }
+    }
+
+    fun recordCopiedText(text: String) {
+        clipboardManager?.addClip(text)
+    }
+
+    fun togglePinClipboardItem(id: Long) {
+        clipboardManager?.togglePin(id)
+    }
+
+    fun deleteClipboardItem(id: Long) {
+        clipboardManager?.deleteClip(id)
+    }
+
+    fun clearUnpinnedClipboard() {
+        clipboardManager?.clearUnpinned()
+    }
+
+    fun replyToClipboardItem(clipText: String, fallbackDraft: String) {
+        val draft = _uiState.value.currentDraft.ifBlank { fallbackDraft }
+        val (instruction, fusedPayload) = ClipboardHistoryManager.buildContextFusionReplyPayload(clipText, draft)
+        startAIStreaming(instruction, fusedPayload)
+    }
+
+    fun summarizeClipboardItem(clipText: String) {
+        startAIStreaming(
+            promptInstruction = "Summarize this copied clipboard text into 3 concise, high-signal bullet points.",
+            draftText = clipText
+        )
+    }
+
+    fun translateClipboardItem(clipText: String) {
+        startAIStreaming(
+            promptInstruction = "Translate this copied clipboard text into fluent, natural English (or Spanish if already in English).",
+            draftText = clipText
+        )
+    }
+
+    // ── Multi-Model Arena Split-Compare ─────────────────────────────
+
+    fun openAndRunModelArena(
+        fallbackDraft: String,
+        instruction: String = "Polish, improve clarity, and make this text shine while preserving its core intent.",
+        overrideModelAId: String? = null,
+        overrideModelBId: String? = null
+    ) {
+        val state = _uiState.value
+        val draft = state.currentDraft.ifBlank { fallbackDraft }
+        val modelAId = overrideModelAId ?: state.activeModel?.id ?: "google/gemini-2.5-flash"
+        val modelBId = overrideModelBId ?: state.pinnedModels.firstOrNull { it.id != modelAId }?.id
+            ?: if (modelAId == "meta-llama/llama-3.3-70b-instruct") "mistralai/mistral-7b-instruct:free"
+            else "meta-llama/llama-3.3-70b-instruct"
+
+        val modelAName = state.availableModels.firstOrNull { it.id == modelAId }?.name
+            ?: modelAId.substringAfterLast('/')
+        val modelBName = state.availableModels.firstOrNull { it.id == modelBId }?.name
+            ?: modelBId.substringAfterLast('/')
+
+        cancelAIStreaming()
+
+        _uiState.update {
+            it.copy(
+                currentDraft = draft,
+                mode = KeyboardMode.ArenaCompareMode(
+                    originalText = draft,
+                    instruction = instruction,
+                    modelAId = modelAId,
+                    modelAName = modelAName,
+                    modelBId = modelBId,
+                    modelBName = modelBName
+                )
+            )
+        }
+
+        val repo = repository ?: return
+        val startMs = SystemClock.elapsedRealtime()
+
+        arenaJobA = viewModelScope.launch {
+            try {
+                repo.streamModelDirect(
+                    modelId = modelAId,
+                    promptInstruction = instruction,
+                    draftText = draft,
+                    targetPackageName = state.targetPackageName
+                ).collect { token ->
+                    _uiState.update { s ->
+                        val arena = s.mode as? KeyboardMode.ArenaCompareMode ?: return@update s
+                        s.copy(
+                            mode = arena.copy(
+                                modelAText = arena.modelAText + token,
+                                modelALatencyMs = SystemClock.elapsedRealtime() - startMs
+                            )
+                        )
+                    }
+                }
+                _uiState.update { s ->
+                    val arena = s.mode as? KeyboardMode.ArenaCompareMode ?: return@update s
+                    s.copy(
+                        mode = arena.copy(
+                            modelAStreaming = false,
+                            modelALatencyMs = SystemClock.elapsedRealtime() - startMs
+                        )
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { s ->
+                    val arena = s.mode as? KeyboardMode.ArenaCompareMode ?: return@update s
+                    s.copy(
+                        mode = arena.copy(
+                            modelAStreaming = false,
+                            modelAError = e.localizedMessage ?: "Model A failed"
+                        )
+                    )
+                }
+            }
+        }
+
+        arenaJobB = viewModelScope.launch {
+            try {
+                repo.streamModelDirect(
+                    modelId = modelBId,
+                    promptInstruction = instruction,
+                    draftText = draft,
+                    targetPackageName = state.targetPackageName
+                ).collect { token ->
+                    _uiState.update { s ->
+                        val arena = s.mode as? KeyboardMode.ArenaCompareMode ?: return@update s
+                        s.copy(
+                            mode = arena.copy(
+                                modelBText = arena.modelBText + token,
+                                modelBLatencyMs = SystemClock.elapsedRealtime() - startMs
+                            )
+                        )
+                    }
+                }
+                _uiState.update { s ->
+                    val arena = s.mode as? KeyboardMode.ArenaCompareMode ?: return@update s
+                    s.copy(
+                        mode = arena.copy(
+                            modelBStreaming = false,
+                            modelBLatencyMs = SystemClock.elapsedRealtime() - startMs
+                        )
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { s ->
+                    val arena = s.mode as? KeyboardMode.ArenaCompareMode ?: return@update s
+                    s.copy(
+                        mode = arena.copy(
+                            modelBStreaming = false,
+                            modelBError = e.localizedMessage ?: "Model B failed"
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    // ── Whisper / Multimodal Voice-to-Action ────────────────────────
+
+    fun openVoiceAction() {
+        _uiState.update {
+            it.copy(mode = KeyboardMode.VoiceActionMode())
+        }
+    }
+
+    fun closeVoiceAction() {
+        _uiState.update { it.copy(mode = KeyboardMode.TypingMode()) }
+    }
+
+    fun processVoiceTranscript(transcript: String, transformMode: VoiceTransformMode) {
+        if (transcript.isBlank()) return
+        startAIStreaming(
+            promptInstruction = transformMode.instruction,
+            draftText = transcript.trim()
+        )
+    }
+
+    fun processVoiceAudioWav(base64Wav: String, transformMode: VoiceTransformMode) {
+        val repo = repository ?: return
+        val modelName = _uiState.value.activeModel?.name ?: "Gemini Audio AI"
+        _uiState.update {
+            it.copy(
+                mode = KeyboardMode.AIStreamingMode(
+                    originalText = "[Voice Recording]",
+                    streamedText = "",
+                    isStreaming = true,
+                    modelUsed = modelName
+                )
+            )
+        }
+        streamingJob?.cancel()
+        streamingJob = viewModelScope.launch {
+            try {
+                repo.streamVoiceAudioAction(
+                    base64AudioWav = base64Wav,
+                    voiceInstruction = transformMode.instruction.ifBlank {
+                        "Transcribe this audio accurately with clean punctuation."
+                    },
+                    targetPackageName = _uiState.value.targetPackageName
+                ).collect { token ->
+                    _uiState.update { state ->
+                        val currentStream = state.mode as? KeyboardMode.AIStreamingMode
+                        if (currentStream != null) {
+                            state.copy(mode = currentStream.copy(streamedText = currentStream.streamedText + token))
+                        } else state
+                    }
+                }
+                _uiState.update { state ->
+                    val currentStream = state.mode as? KeyboardMode.AIStreamingMode
+                    if (currentStream != null) {
+                        state.copy(mode = currentStream.copy(isStreaming = false))
+                    } else state
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { state ->
+                    val currentStream = state.mode as? KeyboardMode.AIStreamingMode
+                    if (currentStream != null) {
+                        state.copy(
+                            mode = currentStream.copy(
+                                isStreaming = false,
+                                error = e.localizedMessage ?: "Voice AI processing failed"
+                            )
+                        )
+                    } else state
+                }
+            }
+        }
+    }
+
     fun commitAIResult() {
         _uiState.update { it.copy(mode = KeyboardMode.TypingMode()) }
     }
@@ -232,6 +522,10 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
     fun cancelAIStreaming() {
         streamingJob?.cancel()
         streamingJob = null
+        arenaJobA?.cancel()
+        arenaJobA = null
+        arenaJobB?.cancel()
+        arenaJobB = null
         _uiState.update { it.copy(mode = KeyboardMode.TypingMode()) }
     }
 
@@ -344,6 +638,10 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
         super.onCleared()
         streamingJob?.cancel()
         streamingJob = null
+        arenaJobA?.cancel()
+        arenaJobA = null
+        arenaJobB?.cancel()
+        arenaJobB = null
     }
 
     companion object {

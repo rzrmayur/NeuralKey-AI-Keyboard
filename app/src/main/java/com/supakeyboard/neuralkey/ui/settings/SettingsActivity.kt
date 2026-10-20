@@ -1,7 +1,9 @@
 package com.supakeyboard.neuralkey.ui.settings
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -12,6 +14,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -131,6 +135,24 @@ import kotlinx.coroutines.launch
 
 class SettingsActivity : ComponentActivity() {
 
+    private val micPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            Toast.makeText(
+                this,
+                "Microphone granted! You can now use NeuralKey Voice-to-Action.",
+                Toast.LENGTH_SHORT
+            ).show()
+        } else {
+            Toast.makeText(
+                this,
+                "Microphone permission is required for Voice-to-Action.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Android 15+ draws edge-to-edge; use light system-bar icons on our dark UI.
         enableEdgeToEdge(
@@ -138,6 +160,12 @@ class SettingsActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
         )
         super.onCreate(savedInstanceState)
+
+        if (intent?.getBooleanExtra("REQUEST_MIC_PERMISSION", false) == true) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
 
         setContent {
             val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -298,7 +326,7 @@ fun CompanionDashboard() {
                                         .padding(horizontal = 6.dp, vertical = 2.dp)
                                 ) {
                                     Text(
-                                        text = "v1.2 FREE",
+                                        text = "v1.3 FREE",
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color(0xFFC4B5FD),
@@ -879,6 +907,7 @@ private fun SmartTypingAndPostureTab(
     val autoCorrectionEnabled by preferences.autoCorrectionEnabled.collectAsState(initial = true)
     val keyMemoryEnabled by preferences.keyMemoryEnabled.collectAsState(initial = true)
     val nextWordEnabled by preferences.nextWordPredictionEnabled.collectAsState(initial = true)
+    val glideTypingEnabled by preferences.glideTypingEnabled.collectAsState(initial = true)
     val oneHandedMode by preferences.oneHandedMode.collectAsState(initial = OneHandedMode.OFF)
     val splitOnFold by preferences.splitKeyboardOnFold.collectAsState(initial = true)
     val hapticEnabled by preferences.hapticFeedbackEnabled.collectAsState(initial = true)
@@ -1217,6 +1246,101 @@ private fun SmartTypingAndPostureTab(
                     accentColor = accentColor,
                     onCheckedChange = { scope.launch { preferences.setSoundFeedbackEnabled(it) } }
                 )
+            }
+        }
+
+        // 4. Futuristic Slash Commands & Neural Power Tools Card
+        item {
+            GlassCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 10.dp)
+                    ) {
+                        Text(
+                            text = "⚡ Slash Commands & Neural Suite",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Type a slash command in any app and press Space or Enter",
+                            fontSize = 12.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(accentColor.copy(alpha = 0.18f))
+                            .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = "v1.3 NEW",
+                            color = accentColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                ModernToggleRow(
+                    title = "Neural Trail Glide Typing (Swipe-to-Type)",
+                    subtitle = "Slide across keys with a glowing neon trail to decode full words via Key Memory + SCOWL",
+                    checked = glideTypingEnabled,
+                    accentColor = accentColor,
+                    onCheckedChange = { scope.launch { preferences.setGlideTypingEnabled(it) } }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf(
+                        "/calc 24*7" to "Instant Math",
+                        "/date" to "ISO Date",
+                        "/time" to "Current Time",
+                        "/clip" to "Latest Clip",
+                        "/shrug" to "¯\\_(ツ)_/¯",
+                        "/email" to "AI Email",
+                        "/fix" to "Fix Grammar",
+                        "/tldr" to "Summarize",
+                        "/polite" to "Diplomatic",
+                        "/sql" to "SQL Query",
+                        "/regex" to "Regex Gen",
+                        "/code" to "Clean Code"
+                    ).forEach { (cmd, desc) ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF181B29))
+                                .border(1.dp, Color(0xFF282D42), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = "$cmd · $desc",
+                                fontSize = 11.sp,
+                                color = Color(0xFFE2E8F0),
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
             }
         }
     }

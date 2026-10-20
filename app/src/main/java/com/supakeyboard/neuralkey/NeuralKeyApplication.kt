@@ -6,6 +6,7 @@ import com.supakeyboard.neuralkey.data.network.OpenRouterApiClient
 import com.supakeyboard.neuralkey.data.preferences.KeyboardPreferences
 import com.supakeyboard.neuralkey.data.repository.OpenRouterRepository
 import com.supakeyboard.neuralkey.data.security.SecureKeyStorage
+import com.supakeyboard.neuralkey.ime.clipboard.ClipboardHistoryManager
 import com.supakeyboard.neuralkey.ime.typing.KeyMemoryStore
 import com.supakeyboard.neuralkey.ime.typing.SuggestionEngine
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,7 @@ class NeuralKeyApplication : Application() {
     val keyboardPreferences by lazy { KeyboardPreferences.getInstance(this) }
     val secureKeyStorage by lazy { SecureKeyStorage.getInstance(this) }
     val keyMemoryStore by lazy { KeyMemoryStore.getInstance(this) }
+    val clipboardHistoryManager by lazy { ClipboardHistoryManager.getInstance(this) }
     val openRouterApiClient by lazy { OpenRouterApiClient() }
 
     val openRouterRepository by lazy {
@@ -71,6 +73,7 @@ class NeuralKeyApplication : Application() {
         applicationScope.cancel()
         OpenRouterRepository.resetInstance()
         NeuralKeyDatabase.resetInstance()
+        ClipboardHistoryManager.resetInstance()
         super.onTerminate()
     }
 

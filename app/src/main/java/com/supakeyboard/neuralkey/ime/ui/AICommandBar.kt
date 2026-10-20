@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.KeyboardHide
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhonelinkSetup
 import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material3.Icon
@@ -42,8 +44,37 @@ fun AICommandBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
-        IconButton(onClick = { onIntent(KeyboardIntent.OpenAIMenu) }, enabled = !uiState.isSensitiveField) {
+        IconButton(
+            onClick = { onIntent(KeyboardIntent.OpenAIMenu) },
+            enabled = !uiState.isSensitiveField,
+            modifier = Modifier.size(38.dp)
+        ) {
             Icon(Icons.Default.AutoAwesome, "Open AI Studio", tint = theme.accentPrimary)
+        }
+
+        if (screenWidthDp >= 340 && !uiState.isSensitiveField) {
+            IconButton(
+                onClick = { onIntent(KeyboardIntent.OpenClipboardFusion) },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ContentPaste,
+                    contentDescription = "Smart Clipboard",
+                    tint = if (uiState.clipboardItems.isNotEmpty()) theme.accentPrimary else theme.keyFunctionalTextColor,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            IconButton(
+                onClick = { onIntent(KeyboardIntent.OpenVoiceAction) },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = "Voice to Action",
+                    tint = theme.keyFunctionalTextColor,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
         }
         val showSuggestions = uiState.suggestionsEnabled && !uiState.isSensitiveField &&
             InputFieldPolicy.allowsSuggestions(uiState.inputType) && uiState.suggestions.isNotEmpty()

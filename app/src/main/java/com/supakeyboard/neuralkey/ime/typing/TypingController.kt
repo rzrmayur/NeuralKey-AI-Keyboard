@@ -87,6 +87,16 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
             if (learnMemory) engine()?.recordWord(suggestion, prev)
             return true
         }
+        // Support selecting a slash command candidate when typing '/'
+        val rawToken = editor.beforeCursor(32).takeLastWhile { !it.isWhitespace() }
+        if (rawToken.startsWith("/") && suggestion.startsWith("/")) {
+            undo = null
+            editor.batch {
+                editor.deleteBefore(rawToken.length)
+                editor.commit(suggestion + " ")
+            }
+            return true
+        }
         // Support selecting a next-word prediction directly after a space
         val after = editor.afterCursor(1).firstOrNull()
         val atWordBoundaryAfterSpace = editor.beforeCursor(1) == " " &&
@@ -98,6 +108,23 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
             return true
         }
         return false
+    }
+
+    /**
+     * Commits the top decoded word for a continuous Neural Trail Glide gesture
+     * and returns the decoded candidate list.
+     */
+    fun glide(editor: TypingEditor, rawPath: String, learnMemory: Boolean = true): List<String> {
+        val prev = previousWord(editor)
+        val candidates = engine()?.decodeGlidePath(rawPath, prev).orEmpty()
+        val best = candidates.firstOrNull() ?: return emptyList()
+        undo = null
+        val beforeChar = editor.beforeCursor(1).firstOrNull()
+        val needsLeadingSpace = beforeChar != null && !beforeChar.isWhitespace() && beforeChar !in "([{\"'“"
+        val toCommit = (if (needsLeadingSpace) " " else "") + best + " "
+        editor.commit(toCommit)
+        if (learnMemory) engine()?.recordWord(best, prev)
+        return candidates
     }
 
     fun backspace(editor: TypingEditor) {
