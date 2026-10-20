@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
 import com.supakeyboard.neuralkey.ime.theme.KeyboardTheme
+import com.supakeyboard.neuralkey.ime.typing.InputFieldPolicy
 
 /** Bounded controls leave room for long model names, narrow windows and large fonts. */
 @Composable
@@ -31,14 +32,29 @@ fun AICommandBar(
     theme: KeyboardTheme = uiState.currentTheme
 ) {
     Row(
-        modifier.fillMaxWidth().height(44.dp).background(theme.commandBarBg).padding(horizontal = 6.dp),
+        modifier.fillMaxWidth().height(48.dp).background(theme.commandBarBg).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         IconButton(onClick = { onIntent(KeyboardIntent.OpenAIMenu) }, enabled = !uiState.isSensitiveField) {
             Icon(Icons.Default.AutoAwesome, "Open AI Studio", tint = theme.accentPrimary)
         }
-        Text(
+        val showSuggestions = uiState.suggestionsEnabled && !uiState.isSensitiveField &&
+            InputFieldPolicy.allowsSuggestions(uiState.inputType) && uiState.suggestions.isNotEmpty()
+        if (showSuggestions) {
+            Row(Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
+                uiState.suggestions.take(3).forEach { word ->
+                    Box(
+                        Modifier.weight(1f).fillMaxHeight()
+                            .clickable { onIntent(KeyboardIntent.SelectSuggestion(word)) }
+                            .padding(horizontal = 3.dp), contentAlignment = Alignment.Center
+                    ) {
+                        Text(word, color = theme.keyTextColor, fontSize = 15.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        } else Text(
             text = if (uiState.isSensitiveField) "Private field" else uiState.activeModel?.name ?: "Choose AI model",
             color = theme.keyTextColor, fontSize = 12.sp, fontWeight = FontWeight.Medium,
             maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -48,25 +64,6 @@ fun AICommandBar(
         )
         IconButton(onClick = { onIntent(KeyboardIntent.HideKeyboard) }) {
             Icon(Icons.Default.KeyboardHide, "Hide keyboard", tint = theme.keyFunctionalTextColor)
-        }
-    }
-}
-
-@Composable
-fun SuggestionBar(uiState: KeyboardUiState, theme: KeyboardTheme, onIntent: (KeyboardIntent) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().height(40.dp).background(theme.commandBarBg),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (uiState.suggestionsEnabled && !uiState.isSensitiveField) {
-            uiState.suggestions.forEach { word ->
-                Box(
-                    Modifier.weight(1f).fillMaxHeight().clickable { onIntent(KeyboardIntent.SelectSuggestion(word)) }
-                        .padding(horizontal = 8.dp), contentAlignment = Alignment.Center
-                ) {
-                    Text(word, color = theme.keyTextColor, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-            }
         }
     }
 }

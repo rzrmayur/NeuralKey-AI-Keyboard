@@ -10,9 +10,9 @@
 
 ---
 
-## Version 1.1.0
+## Version 1.1.1
 
-S22/system-navigation layout fixes, cancellation-safe key gestures, and offline English suggestions/autocorrection. See [release notes](docs/releases/v1.1.0.md) for installation and signing details.
+Follow-up to the Samsung S22 layout report: a compact shared toolbar/suggestion row and native safe-area handling that refreshes on first show, app changes and navigation changes. See [release notes](docs/releases/v1.1.1.md) for installation and signing details.
 
 - Suggestions use a bundled SCOWL dictionary and never send typing to an AI provider.
 - Preferences has independent switches for suggestions and autocorrection.
@@ -66,7 +66,8 @@ com.supakeyboard.neuralkey/
 │   ├── theme/                         # Theme definitions & dynamic palette engine
 │   └── ui/
 │       ├── KeyboardRootView.kt        # Rock-solid height container & dispatcher
-│       ├── AICommandBar.kt            # Compact 44dp utility toolbar
+│       ├── AICommandBar.kt            # Shared 48dp toolbar / word suggestions
+│       ├── ImeInsetsHost.kt           # Native system-control safe-area container
 │       ├── AIPromptSelectionPanel.kt  # 2-column action studio panel
 │       ├── AIStreamingPreviewCard.kt  # Live token typewriter streaming view
 │       └── InlineModelQuickSwitcher.kt# Fast model switcher

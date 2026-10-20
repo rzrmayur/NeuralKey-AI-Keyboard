@@ -3,6 +3,7 @@ package com.supakeyboard.neuralkey.ime
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.Window
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.ExtractedTextRequest
@@ -25,6 +26,7 @@ import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
 import com.supakeyboard.neuralkey.ime.typing.InputFieldPolicy
 import com.supakeyboard.neuralkey.ime.typing.TypingController
 import com.supakeyboard.neuralkey.ime.typing.TypingEditor
+import com.supakeyboard.neuralkey.ime.ui.ImeInsetsHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +51,7 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
     private val typing = TypingController { (application as NeuralKeyApplication).suggestionEngine }
     private var suggestionJob: Job? = null
     private var inputActive = false
+    private var inputHost: ImeInsetsHost? = null
 
     private class ConnectionEditor(private val ic: InputConnection) : TypingEditor {
         override fun beforeCursor(limit: Int) = ic.getTextBeforeCursor(limit, 0)?.toString().orEmpty()
@@ -66,8 +69,23 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
     // Keep the host editor visible in landscape and split-screen as well.
     override fun onEvaluateFullscreenMode() = false
 
+    override fun onConfigureWindow(win: Window, isFullscreen: Boolean, isCandidatesOnly: Boolean) {
+        super.onConfigureWindow(win, isFullscreen, isCandidatesOnly)
+        // Give the input host one explicit owner for system-bar padding. Do not modify
+        // the framework's IME touch region or hide its keyboard-switch/hide controls.
+        win.setDecorFitsSystemWindows(false)
+    }
+
+    override fun onWindowShown() {
+        super.onWindowShown()
+        inputHost?.refreshInsets()
+    }
+
     override fun onCreateInputView(): View {
-        return try {
+        val host = ImeInsetsHost(this)
+        inputHost = host
+        attachViewTreeOwners(host)
+        val content = try {
             ComposeView(this).apply {
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                 attachViewTreeOwners(this)
@@ -95,6 +113,8 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             Log.e(TAG, "Failed to create Compose input view, falling back to simple view", e)
             createFallbackInputView()
         }
+        host.addView(content)
+        return host
     }
 
     private fun createFallbackInputView(): View {
@@ -129,7 +149,13 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        inputHost?.refreshInsets()
         updateDraftAfterEdit()
+    }
+
+    override fun onDestroy() {
+        inputHost = null
+        super.onDestroy()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {

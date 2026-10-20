@@ -1,6 +1,6 @@
 package com.supakeyboard.neuralkey.ime.ui
 
-import androidx.compose.foundation.layout.WindowInsets
+import android.text.InputType
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
@@ -25,18 +25,17 @@ import org.robolectric.annotation.LooperMode
 class KeyboardLayoutTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun bottomKeysStayAboveSystemControlsAndPanelsKeepHeight() {
+    @Test fun toolbarHasNoEmptySuggestionRowAndPanelsKeepHeight() {
         val state = mutableStateOf(KeyboardUiState())
         compose.setContent {
             MaterialTheme {
-                KeyboardRootView(state.value, {}, Modifier.testTag("root"), WindowInsets(bottom = 48.dp))
+                KeyboardRootView(state.value, {}, Modifier.testTag("root"))
             }
         }
         val root = compose.onNodeWithTag("root").getUnclippedBoundsInRoot()
-        val switch = compose.onNodeWithContentDescription("Switch keyboard").getUnclippedBoundsInRoot()
-        val space = compose.onNodeWithContentDescription("Space").getUnclippedBoundsInRoot()
-        assertTrue(root.bottom - switch.bottom >= 48.dp)
-        assertTrue(root.bottom - space.bottom >= 48.dp)
+        val firstKey = compose.onNodeWithContentDescription("q").getUnclippedBoundsInRoot()
+        // One 48dp toolbar, then the first key (including its normal key gutter).
+        assertTrue(firstKey.top - root.top < 58.dp)
         for (mode in listOf(KeyboardMode.AIMenuMode("hello"), KeyboardMode.ModelPickerMode(),
             KeyboardMode.AIStreamingMode("hello", "world", false))) {
             compose.runOnIdle { state.value = state.value.copy(mode = mode) }
@@ -48,7 +47,7 @@ class KeyboardLayoutTest {
     fun narrowWindowKeepsSwitchAndHideControlsAccessible() {
         val intents = mutableListOf<KeyboardIntent>()
         compose.setContent {
-            MaterialTheme { KeyboardRootView(KeyboardUiState(), intents::add, systemInsets = WindowInsets(bottom = 24.dp)) }
+            MaterialTheme { KeyboardRootView(KeyboardUiState(), intents::add) }
         }
         compose.onNodeWithContentDescription("Switch keyboard").assertIsDisplayed().performClick()
         compose.onNodeWithContentDescription("Hide keyboard").assertIsDisplayed().performClick()
@@ -57,25 +56,24 @@ class KeyboardLayoutTest {
     }
 
     @Test @Config(qualifiers = "w800dp-h360dp-land")
-    fun landscapeRespectsSideNavigationInsets() {
+    fun landscapeKeepsControlsVisibleAndCompact() {
         compose.setContent {
             MaterialTheme {
-                KeyboardRootView(KeyboardUiState(), {}, Modifier.testTag("root"),
-                    WindowInsets(left = 48.dp, right = 24.dp, bottom = 0.dp))
+                KeyboardRootView(KeyboardUiState(), {}, Modifier.testTag("root"))
             }
         }
         val root = compose.onNodeWithTag("root").getUnclippedBoundsInRoot()
         val switch = compose.onNodeWithContentDescription("Switch keyboard").getUnclippedBoundsInRoot()
         val enter = compose.onNodeWithContentDescription("Enter").getUnclippedBoundsInRoot()
-        assertTrue(switch.left - root.left >= 48.dp)
-        assertTrue(root.right - enter.right >= 24.dp)
-        assertTrue(root.bottom - root.top < 260.dp)
+        assertTrue(switch.left >= root.left)
+        assertTrue(enter.right <= root.right)
+        assertTrue(root.bottom - root.top < 220.dp)
     }
 
     @Test fun cancelledCharacterTouchDoesNotCommit() {
         val intents = mutableListOf<KeyboardIntent>()
         compose.setContent {
-            MaterialTheme { KeyboardRootView(KeyboardUiState(), intents::add, systemInsets = WindowInsets(0, 0, 0, 0)) }
+            MaterialTheme { KeyboardRootView(KeyboardUiState(), intents::add) }
         }
         compose.onNodeWithContentDescription("q").performTouchInput {
             down(center)
@@ -88,7 +86,7 @@ class KeyboardLayoutTest {
     @Test fun cancelledBackspaceStopsRepeating() {
         val intents = mutableListOf<KeyboardIntent>()
         compose.setContent {
-            MaterialTheme { KeyboardRootView(KeyboardUiState(), intents::add, systemInsets = WindowInsets(0, 0, 0, 0)) }
+            MaterialTheme { KeyboardRootView(KeyboardUiState(), intents::add) }
         }
         compose.onNodeWithContentDescription("Backspace").performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(500)
@@ -99,5 +97,34 @@ class KeyboardLayoutTest {
         compose.waitForIdle()
         assertEquals(afterCancel, intents.size)
         assertTrue(KeyboardIntent.DeleteBackwards in intents)
+    }
+
+    @Test fun suggestionsShareToolbarWithoutMovingKeysAndRemainSelectable() {
+        val state = mutableStateOf(KeyboardUiState(inputType = InputType.TYPE_CLASS_TEXT))
+        val intents = mutableListOf<KeyboardIntent>()
+        compose.setContent { MaterialTheme { KeyboardRootView(state.value, intents::add, Modifier.testTag("root")) } }
+        val original = compose.onNodeWithContentDescription("q").getUnclippedBoundsInRoot()
+        compose.runOnIdle { state.value = state.value.copy(suggestions = listOf("hell", "hello", "help")) }
+        compose.onNodeWithText("hello").assertIsDisplayed().performClick()
+        assertTrue(KeyboardIntent.SelectSuggestion("hello") in intents)
+        assertEquals(original, compose.onNodeWithContentDescription("q").getUnclippedBoundsInRoot())
+        compose.onNodeWithContentDescription("Open AI Studio").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Hide keyboard").assertIsDisplayed()
+        compose.runOnIdle { state.value = state.value.copy(suggestionsEnabled = false) }
+        compose.onNodeWithText("hello").assertDoesNotExist()
+        assertEquals(original, compose.onNodeWithContentDescription("q").getUnclippedBoundsInRoot())
+    }
+
+    @Test fun urlFieldDoesNotDisplayStaleWordSuggestions() {
+        compose.setContent {
+            MaterialTheme {
+                KeyboardRootView(KeyboardUiState(
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI,
+                    suggestions = listOf("hello")
+                ), {})
+            }
+        }
+        compose.onNodeWithText("hello").assertDoesNotExist()
+        compose.onNodeWithText("Choose AI model").assertIsDisplayed()
     }
 }

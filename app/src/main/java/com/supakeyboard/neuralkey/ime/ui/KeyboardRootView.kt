@@ -8,16 +8,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.captionBar
-import androidx.compose.foundation.layout.displayCutout
-import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -35,8 +29,7 @@ import com.supakeyboard.neuralkey.ime.theme.createDynamicKeyboardTheme
 fun KeyboardRootView(
     uiState: KeyboardUiState,
     onIntent: (KeyboardIntent) -> Unit,
-    modifier: Modifier = Modifier,
-    systemInsets: WindowInsets? = null
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val isSystemDark = isSystemInDarkTheme()
@@ -57,31 +50,29 @@ fun KeyboardRootView(
         configuration.screenHeightDp < 650 -> 225.dp
         else -> 248.dp
     }
-    val totalPanelHeight = keyboardContentHeight + 84.dp
+    val totalPanelHeight = keyboardContentHeight + 48.dp
+    val view = LocalView.current
+    SideEffect {
+        // Continue the keyboard's surface through the system-control area.
+        (view.parent?.parent as? ImeInsetsHost)?.setBackgroundColor(resolvedTheme.surfaceColor.toArgb())
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
             .background(resolvedTheme.backgroundBrush)
-            // Consume only remaining system insets. Never use imePadding inside an IME.
-            // Caption bars include newer system keyboard-switch/hide controls.
-            .windowInsetsPadding(
-                (systemInsets ?: WindowInsets.navigationBars.union(WindowInsets.captionBar).union(WindowInsets.displayCutout))
-                    .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
-            )
+            // Native ImeInsetsHost owns system spacing; do not apply it twice in Compose.
             .padding(bottom = 6.dp)
     ) {
         when (uiState.mode) {
             is KeyboardMode.TypingMode -> {
-                // 1. Top Utility Command Bar (44dp)
+                // One toolbar: suggestions replace its center label while typing.
                 AICommandBar(
                     uiState = uiState,
                     theme = resolvedTheme,
                     onIntent = onIntent
                 )
-
-                SuggestionBar(uiState, resolvedTheme, onIntent)
 
                 // 2. Physical QWERTY / Symbols Key Grid
                 Box(
