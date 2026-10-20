@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">NeuralKey AI</string>
+    <string name="ime_name">NeuralKey AI Keyboard</string>
+    <string name="subtype_en_us">English (US)</string>
+    <string name="settings_title">NeuralKey Settings</string>
+</resources>

@@ -1,0 +1,275 @@
+package com.supakeyboard.neuralkey.ime.ui
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.supakeyboard.neuralkey.ime.mvi.AICommitAction
+import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
+import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
+
+@Composable
+fun AIStreamingPreviewCard(
+    streamingMode: KeyboardMode.AIStreamingMode,
+    theme: com.supakeyboard.neuralkey.ime.theme.KeyboardTheme,
+    onIntent: (KeyboardIntent) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+
+    // Typewriter animation: animate the visible character count
+    val fullText = streamingMode.streamedText
+    val revealedCharCount by animateFloatAsState(
+        targetValue = fullText.length.toFloat(),
+        animationSpec = tween(durationMillis = if (streamingMode.isStreaming) 150 else 400),
+        label = "typewriterReveal"
+    )
+    val displayedText = if (streamingMode.isStreaming) {
+        // Smooth reveal while streaming
+        fullText
+    } else {
+        // Typewriter effect when complete
+        fullText.take(revealedCharCount.toInt())
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(theme.previewCardBg)
+            .padding(10.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Header: Model badge + streaming status + cancel
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (streamingMode.isStreaming) {
+                        CircularProgressIndicator(
+                            color = Color(0xFF00E5FF),
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = "Streaming from ${streamingMode.modelUsed}...",
+                            fontSize = 12.sp,
+                            color = Color(0xFF38BDF8),
+                            fontWeight = FontWeight.Medium
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF10B981))
+                        )
+                        Text(
+                            text = "Generated by ${streamingMode.modelUsed}",
+                            fontSize = 12.sp,
+                            color = Color(0xFF34D399),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // Close / Cancel icon
+                Box(
+                    modifier = Modifier
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF27272A))
+                        .clickable { onIntent(KeyboardIntent.CancelAIStreaming) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cancel",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            // Streamed Text Preview Box (Glassmorphic look)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 60.dp, max = 130.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF1F1F23))
+                    .padding(10.dp)
+                    .verticalScroll(scrollState)
+            ) {
+                if (streamingMode.error != null) {
+                    Text(
+                        text = "⚠️ Error: ${streamingMode.error}",
+                        color = Color(0xFFF87171),
+                        fontSize = 13.sp
+                    )
+                } else if (streamingMode.streamedText.isEmpty()) {
+                    Text(
+                        text = "Connecting to provider...",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 13.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                } else {
+                    val cursorSuffix = if (streamingMode.isStreaming) " ▌" else ""
+                    Text(
+                        text = displayedText + cursorSuffix,
+                        color = Color(0xFFF8FAFC),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
+                }
+            }
+
+            // Action Buttons Bar with scale-in + fade-in animation when streaming completes
+            AnimatedVisibility(
+                visible = streamingMode.streamedText.isNotEmpty(),
+                enter = scaleIn(animationSpec = tween(350)) + fadeIn(animationSpec = tween(350)),
+                exit = fadeOut(animationSpec = tween(200))
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Replace Draft
+                    Box(
+                        modifier = Modifier
+                            .weight(1.3f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(theme.accentPrimary, theme.accentSecondary)
+                                )
+                            )
+                            .clickable {
+                                onIntent(KeyboardIntent.CommitAIResult(AICommitAction.REPLACE_DRAFT))
+                            }
+                            .padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Done,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "Replace Draft",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Insert Below
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF27272A))
+                            .clickable {
+                                onIntent(KeyboardIntent.CommitAIResult(AICommitAction.INSERT_BELOW))
+                            }
+                            .padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Text(
+                                text = "Insert Below",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    // Copy
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF27272A))
+                            .clickable {
+                                onIntent(KeyboardIntent.CommitAIResult(AICommitAction.COPY_TO_CLIPBOARD))
+                            }
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy",
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
