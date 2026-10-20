@@ -40,27 +40,38 @@ abstract class NeuralKeyDatabase : RoomDatabase() {
             }
         }
 
+        fun resetInstance() {
+            synchronized(this) {
+                runCatching { instance?.close() }
+                instance = null
+            }
+        }
+
         private fun buildDatabase(context: Context, scope: CoroutineScope): NeuralKeyDatabase {
             return Room.databaseBuilder(
                 context.applicationContext,
                 NeuralKeyDatabase::class.java,
                 DATABASE_NAME
             )
-            .fallbackToDestructiveMigration()
+            .fallbackToDestructiveMigration(true)
             .addCallback(object : Callback() {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     super.onCreate(db)
                     scope.launch {
-                        getInstance(context).userPromptDao().insertPrompts(UserPromptEntity.defaultPrompts())
+                        runCatching {
+                            getInstance(context).userPromptDao().insertPrompts(UserPromptEntity.defaultPrompts())
+                        }
                     }
                 }
 
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
                     scope.launch {
-                        val dao = getInstance(context).userPromptDao()
-                        if (dao.getPromptCount() < UserPromptEntity.defaultPrompts().size) {
-                            dao.insertPrompts(UserPromptEntity.defaultPrompts())
+                        runCatching {
+                            val dao = getInstance(context).userPromptDao()
+                            if (dao.getPromptCount() < UserPromptEntity.defaultPrompts().size) {
+                                dao.insertPrompts(UserPromptEntity.defaultPrompts())
+                            }
                         }
                     }
                 }
