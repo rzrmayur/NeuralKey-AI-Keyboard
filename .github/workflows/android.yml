@@ -36,6 +36,13 @@ jobs:
       - name: Prepare download
         run: |
           mkdir -p dist
+          python - <<'PY'
+          import gzip, zipfile
+          with zipfile.ZipFile('app/build/outputs/apk/debug/app-debug.apk') as apk:
+              words = gzip.decompress(apk.read('assets/english_words.dict')).decode().splitlines()
+              assert len(words) > 100000, 'Offline dictionary missing or incomplete'
+              assert 'assets/licenses/english-dictionary.txt' in apk.namelist()
+          PY
           cp app/build/outputs/apk/debug/app-debug.apk dist/NeuralKey-AI-Keyboard-v1.1.0.apk
           cd dist
           sha256sum NeuralKey-AI-Keyboard-v1.1.0.apk > SHA256SUMS.txt

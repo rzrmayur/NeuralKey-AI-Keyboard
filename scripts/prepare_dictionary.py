@@ -45,5 +45,5 @@ for line in Path(sys.argv[1]).read_text().splitlines()[1:]:
                         forms.update(apply(prefixed, 'SFX', s))
     words.update(w for w in forms if 2 <= len(w) <= 32)
 payload = ('\n'.join(sorted(words)) + '\n').encode()
-Path(sys.argv[3]).write_bytes(gzip.compress(payload, mtime=0) if sys.argv[3].endswith('.gz') else payload)
+Path(sys.argv[3]).write_bytes(gzip.compress(payload, mtime=0) if sys.argv[3].endswith(('.gz', '.dict')) else payload)
 print(f'{len(words)} dictionary words')

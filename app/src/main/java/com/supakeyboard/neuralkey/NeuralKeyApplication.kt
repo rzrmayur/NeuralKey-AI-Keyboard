@@ -39,7 +39,7 @@ class NeuralKeyApplication : Application() {
         instance = this
         applicationScope.launch(Dispatchers.IO) {
             try {
-                val words = java.util.zip.GZIPInputStream(assets.open("english_words.txt.gz")).bufferedReader().use { it.readLines() }
+                val words = java.util.zip.GZIPInputStream(assets.open("english_words.dict")).bufferedReader().use { it.readLines() }
                 suggestionEngine = com.supakeyboard.neuralkey.ime.typing.SuggestionEngine(words)
             } catch (e: java.io.IOException) {
                 android.util.Log.e("NeuralKey", "Offline dictionary unavailable", e)
