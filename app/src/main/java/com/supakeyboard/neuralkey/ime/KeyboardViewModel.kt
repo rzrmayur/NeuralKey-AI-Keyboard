@@ -6,10 +6,10 @@ import android.view.inputmethod.EditorInfo
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.supakeyboard.neuralkey.NeuralKeyApplication
-import com.supakeyboard.neuralkey.data.db.entity.OpenRouterModelEntity
 import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
+import com.supakeyboard.neuralkey.ime.mvi.OneHandedMode
 import com.supakeyboard.neuralkey.ime.theme.KeyboardThemes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -41,7 +41,6 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
 
     private var streamingJob: Job? = null
 
-
     init {
         val repo = repository
         val prefs = preferences
@@ -54,6 +53,28 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
             viewModelScope.launch {
                 prefs.autoCorrectionEnabled.collect { enabled ->
                     _uiState.update { it.copy(autoCorrectionEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                prefs.keyMemoryEnabled.collect { enabled ->
+                    _uiState.update { it.copy(keyMemoryEnabled = enabled) }
+                    runCatching { com.supakeyboard.neuralkey.NeuralKeyApplication.instance.suggestionEngine?.keyMemoryEnabled = enabled }
+                }
+            }
+            viewModelScope.launch {
+                prefs.nextWordPredictionEnabled.collect { enabled ->
+                    _uiState.update { it.copy(nextWordPredictionEnabled = enabled) }
+                    runCatching { com.supakeyboard.neuralkey.NeuralKeyApplication.instance.suggestionEngine?.nextWordPredictionEnabled = enabled }
+                }
+            }
+            viewModelScope.launch {
+                prefs.oneHandedMode.collect { mode ->
+                    _uiState.update { it.copy(oneHandedMode = mode) }
+                }
+            }
+            viewModelScope.launch {
+                prefs.splitKeyboardOnFold.collect { split ->
+                    _uiState.update { it.copy(splitKeyboardOnFold = split) }
                 }
             }
             // Use individual launch/collect for robustness — avoids fragile chained combine
@@ -157,6 +178,28 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
 
     fun switchSymbolsPage() {
         _uiState.update { it.copy(isSymbolsPage2 = !it.isSymbolsPage2) }
+    }
+
+    fun setOneHandedMode(mode: OneHandedMode) {
+        _uiState.update { it.copy(oneHandedMode = mode) }
+        val prefs = preferences ?: return
+        viewModelScope.launch { prefs.setOneHandedMode(mode) }
+    }
+
+    fun cycleOneHandedMode() {
+        val next = when (_uiState.value.oneHandedMode) {
+            OneHandedMode.OFF -> OneHandedMode.RIGHT
+            OneHandedMode.RIGHT -> OneHandedMode.LEFT
+            OneHandedMode.LEFT -> OneHandedMode.OFF
+        }
+        setOneHandedMode(next)
+    }
+
+    fun toggleSplitLayout() {
+        val next = !_uiState.value.splitKeyboardOnFold
+        _uiState.update { it.copy(splitKeyboardOnFold = next) }
+        val prefs = preferences ?: return
+        viewModelScope.launch { prefs.setSplitKeyboardOnFold(next) }
     }
 
     fun openAIMenu(draft: String) {

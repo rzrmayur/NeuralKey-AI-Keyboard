@@ -3,7 +3,7 @@
 # 🧠 NeuralKey AI Keyboard
 ### *100% Free, Open-Source, Zero-Telemetry Intelligent Android IME*
 
-**Built natively with 100% Jetpack Compose • Kotlin 2.1 • Direct OpenRouter SSE Streaming • Offline 100k+ Word SCOWL Engine • Hardware-Backed AES-256-GCM Security**
+**Built natively with 100% Jetpack Compose • Kotlin 2.1 • Adaptive On-Device Key Memory & N-Gram Predictions • Foldable & One-Handed Postures • Direct OpenRouter SSE Streaming • 32 Email & Productivity AI Tools • 15 Flagship Themes**
 
 [![Release](https://img.shields.io/github/v/release/rzrmayur/NeuralKey-AI-Keyboard?style=for-the-badge&logo=android&logoColor=white&label=Latest%20APK&color=10B981)](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest)
 [![CI Status](https://img.shields.io/github/actions/workflow/status/rzrmayur/NeuralKey-AI-Keyboard/android.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Android%20CI)](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/actions)
@@ -11,15 +11,15 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-38BDF8?style=for-the-badge&logo=apache&logoColor=white)](LICENSE)
 
 [![Platform](https://img.shields.io/badge/Android-11%2B%20(API%2030--36)-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
+[![Foldable Ready](https://img.shields.io/badge/Form%20Factors-Phones%20%E2%80%A2%20Foldables%20%E2%80%A2%20Flips-00E5FF?style=flat-square&logo=samsung&logoColor=white)](#-deep-dive-one-handed-mode--foldable--flip-posture-engine)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1.20-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202025.05.00-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![Ktor](https://img.shields.io/badge/Ktor%20SSE-3.3.2-087CFA?style=flat-square&logo=ktor&logoColor=white)](https://ktor.io)
-[![Room FTS4](https://img.shields.io/badge/Room%20SQLite-2.7.1%20(FTS4)-FF6F00?style=flat-square&logo=sqlite&logoColor=white)](https://developer.android.com/training/data-storage/room)
 [![OpenRouter](https://img.shields.io/badge/AI%20Engine-300%2B%20LLMs%20(Free%20Tier%20Supported)-F97316?style=flat-square)](https://openrouter.ai)
 
 <br />
 
-[**⬇️ Download Latest APK (v1.1.1)**](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest) • [**✨ Features**](#-key-capabilities--feature-matrix) • [**🏗️ Architecture**](#️-system-architecture--data-flow) • [**🔒 Security & Privacy**](#-defense-in-depth-security--privacy-architecture) • [**🚀 Quick Start**](#-installation--zero-cost-setup-guide) • [**👨‍💻 About**](#-about-the-creator--project-mission)
+[**⬇️ Download Latest APK (v1.2.0)**](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest) • [**✨ Features**](#-key-capabilities--feature-matrix) • [**🏗️ Architecture**](#️-system-architecture--data-flow) • [**🧠 Key Memory**](#-deep-dive-adaptive-key-memory--offline-scowl-engine) • [**📱 Fold & One-Handed**](#-deep-dive-one-handed-mode--foldable--flip-posture-engine) • [**🔒 Security**](#-defense-in-depth-security--privacy-architecture) • [**🚀 Quick Start**](#-installation--zero-cost-setup-guide)
 
 </div>
 
@@ -28,17 +28,18 @@
 ## 📑 Table of Contents
 
 1. [🌍 Free-for-All Manifesto (Why NeuralKey Exists)](#-free-for-all-manifesto)
-2. [🔥 What's New in v1.1.1](#-whats-new-in-v111)
+2. [🔥 What's New in v1.2.0](#-whats-new-in-v120)
 3. [⚡ Key Capabilities & Competitive Matrix](#-key-capabilities--feature-matrix)
 4. [🏗️ System Architecture & Unidirectional Data Flow](#️-system-architecture--data-flow)
-5. [🧠 Deep Dive: Context-Aware AI Engine & SSE Streaming](#-deep-dive-context-aware-ai-engine--sse-streaming)
-6. [📚 Deep Dive: 100% Offline SCOWL Typing & Autocorrect Engine](#-deep-dive-100-offline-scowl-typing--autocorrect-engine)
-7. [📐 Deep Dive: OEM WindowInsets Reconciliation (`ImeInsetsHost`)](#-deep-dive-oem-windowinsets-reconciliation-imeinsetshost)
-8. [🎨 Theme Gallery & Tactile Hardware Haptics](#-theme-gallery--tactile-hardware-haptics)
-9. [🔒 Defense-in-Depth Security & Privacy Architecture](#-defense-in-depth-security--privacy-architecture)
-10. [🚀 Installation & Zero-Cost Setup Guide](#-installation--zero-cost-setup-guide)
-11. [🛠️ Building from Source & CI Verification Suite](#️-building-from-source--ci-verification-suite)
-12. [👨‍💻 About the Creator & Project Mission](#-about-the-creator--project-mission)
+5. [🧠 Deep Dive: Context-Aware AI Engine, Email Suite & SSE Streaming](#-deep-dive-context-aware-ai-engine-email-suite--sse-streaming)
+6. [📚 Deep Dive: Adaptive Key Memory & Offline SCOWL Engine](#-deep-dive-adaptive-key-memory--offline-scowl-engine)
+7. [📱 Deep Dive: One-Handed Mode & Foldable / Flip Posture Engine](#-deep-dive-one-handed-mode--foldable--flip-posture-engine)
+8. [📐 Deep Dive: OEM WindowInsets Reconciliation (`ImeInsetsHost`)](#-deep-dive-oem-windowinsets-reconciliation-imeinsetshost)
+9. [🎨 15 Flagship Themes & Tactile Hardware Haptics](#-15-flagship-themes--tactile-hardware-haptics)
+10. [🔒 Defense-in-Depth Security & Privacy Architecture](#-defense-in-depth-security--privacy-architecture)
+11. [🚀 Installation & Zero-Cost Setup Guide](#-installation--zero-cost-setup-guide)
+12. [🛠️ Building from Source & CI Verification Suite](#️-building-from-source--ci-verification-suite)
+13. [👨‍💻 About the Creator & Project Mission](#-about-the-creator--project-mission)
 
 ---
 
@@ -52,21 +53,31 @@ Most commercial "AI keyboards" on mobile stores charge **$9.99–$19.99/month**,
 
 | Pillar | How NeuralKey Delivers It for $0.00 |
 | :--- | :--- |
-| **🆓 100% Free Application** | Released under the permissive **Apache 2.0 License**. Every feature, all 9 dynamic themes, all 21 AI actions, custom prompt studio, and offline autocorrect are unlocked out of the box for everyone. |
+| **🆓 100% Free Application** | Released under the permissive **Apache 2.0 License**. Every feature, all **15 dynamic themes**, all **32 AI actions** (including the Email Drafts Suite), custom prompt studio, One-Handed/Foldable layouts, and Adaptive Key Memory are unlocked out of the box for everyone. |
 | **⚡ Zero-Cost AI Inference (`:free` LLMs)** | Supports **OpenRouter's Free Tier** natively. Toggle the built-in **`⚡ Free Models Only`** filter in the Model Explorer or inline switcher to run powerful free models (e.g., *Mistral 7B Instruct Free*, *Llama 3.3 Free*, *Gemini Flash Free*, *DeepSeek Free*) at **$0.00 cost**. |
-| **📴 100% Offline Daily Typing** | Word completions, spell-checking, and spacebar autocorrection run **entirely on-device** using a bundled **100,000+ word SCOWL English dictionary**. Everyday typing never touches the network and never requires an account or API key. |
+| **📴 100% Offline Daily Typing & Key Memory** | Word completions, Adaptive Key Memory learning, N-gram next-word predictions, and spacebar autocorrection run **entirely on-device** using a bundled **100,000+ word SCOWL English dictionary**. Everyday typing never touches the network and never requires an account or API key. |
 | **🔗 Direct Bring-Your-Own-Key (BYOK)** | Your device connects **directly** to `https://openrouter.ai/api/v1` over TLS. There is zero developer proxy server between your keyboard and the inference engine. |
 
 ---
 
-## 🔥 What's New in v1.1.1
+## 🔥 What's New in v1.2.0
 
-See full release notes in [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md) and [`docs/releases/v1.1.0.md`](docs/releases/v1.1.0.md).
+See full release notes in [`docs/releases/v1.2.0.md`](docs/releases/v1.2.0.md), [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md), and [`docs/releases/v1.1.0.md`](docs/releases/v1.1.0.md).
 
-- **Unified 48dp Command & Suggestion Bar (`AICommandBar`):** Replaced the separate suggestion strip with a single zero-jitter `48dp` toolbar. Live word suggestions appear seamlessly between the **✨ AI** and **Hide Keyboard** buttons while typing—without shifting key row coordinates—and automatically restore the inline model selector when idle.
-- **Pre-Draw Native WindowInsets Reconciliation (`ImeInsetsHost`):** Moved system safe-area handling into a custom native `FrameLayout` (`ImeInsetsHost`) using a `ViewTreeObserver.OnPreDrawListener`. Reconciles real window `navigationBars()`, `captionBar()`, and `displayCutout()` insets against platform-reserved gaps before the first frame draws—eliminating Samsung One UI / Android 15 bottom-bar overlap on first open in WhatsApp and Chrome.
-- **100k+ Word Offline SCOWL Engine & Single-Backspace Undo:** Instant prefix binary search + Damerau-Levenshtein 1-edit distance candidate ranking off the UI thread, conservative spacebar auto-replacement, and immediate **Backspace undo** to restore your exact original spelling.
-- **Strict Input-Field Privacy Gate (`InputFieldPolicy`):** Automatically disables draft extraction, AI actions, and word suggestions inside password fields (`TEXT_VARIATION_PASSWORD`, `VISIBLE_PASSWORD`, `WEB_PASSWORD`, `NUMBER_VARIATION_PASSWORD`), and cancels active streams on field/app switches.
+- **🧠 Adaptive On-Device Key Memory & N-Gram Next-Word Predictions (`KeyMemoryStore` + `SuggestionEngine`):**
+  - Automatically learns your personal vocabulary, custom names/jargon, preferred capitalization, and contextual word-to-word transitions (`previousWord -> nextWord`) 100% offline.
+  - Predicts the **top 3 likely next words** immediately after pressing Space, and boosts QWERTY spatially adjacent typo fixes.
+  - Includes a dedicated **Smart Typing** studio in Settings to teach custom words or wipe Key Memory in 1 tap.
+- **📱 One-Handed Mode & Foldable / Flip Device Postures (`DeviceKeyboardPosture`):**
+  - **One-Handed Mode (`LEFT` / `RIGHT`):** Compacts the keyboard to `82%` width anchored to either side with an `18%` quick-action dock sidebar to flip sides (`◀` / `▶`) or expand to full width (`⤢`).
+  - **Unfolded Foldable Split Mode:** Automatically detects unfolded inner displays (`>= 600dp`, e.g., Galaxy Z Fold, Pixel Pro Fold, OnePlus Open, tablets) and splits the key grid into left/right thumb clusters with an ergonomic central gap and **dual thumb spacebars**.
+  - **Flip Phone Cover Screen Compact Mode:** Automatically compacts row heights on short cover screens (`<= 440dp`, e.g., Galaxy Z Flip / Razr) so the host editor stays visible.
+- **✉️ 32 Built-In AI Actions (New Email Drafts & Smart Writing Suites):**
+  - Added 6 dedicated **Email & Drafts** tools (*Reply: Confirm & Accept*, *Reply: Polite Decline*, *Cold Outreach Email*, *Follow-Up Nudge*, *Meeting Recap & Actions*, *Subject Line Generator*) with automatic **✉️ Email Mode** detection in Gmail/Outlook.
+  - Added 4 **Smart Writing & Engineering** tools (*Expand & Elaborate*, *Brainstorm 5 Angles*, *Pros, Cons & Risks*, *Bug / Jira Spec*) plus *Translate to German*.
+- **🎨 15 Flagship Themes & Modernized Animated Dashboard (`SettingsActivity`):**
+  - Added 6 new themes: **Dracula Pro** 🧛, **Nordic Frost** ❄️, **Mocha Espresso** ☕, **Carbon Titanium** 🏎️, **Abyssal Biolume** 🌊, and **Rose Quartz** 🌹.
+  - Completely redesigned the companion app with a pulsing status pill, live telemetry strip, spring-animated tab transitions, interactive key-physics theme mockup, and custom AI tool builder.
 
 ---
 
@@ -78,21 +89,12 @@ See full release notes in [`docs/releases/v1.1.1.md`](docs/releases/v1.1.1.md) a
 | :--- | :---: | :---: | :---: |
 | **Price & Licensing** | **100% Free & Open Source (Apache 2.0)** | $8–$20/mo Subscription | Free (Often closed-source) |
 | **Telemetry & Keystroke Logging** | **Zero Telemetry / Air-Gapped Backup Rules** | Cloud analytics & keystroke profiling | Vendor cloud sync |
+| **Adaptive Key Memory** | **100% On-Device Unigram & Bigram Learning** | Cloud-synced user profiling | Cloud-synced |
+| **Foldable & Flip Support** | **Auto Split on Fold (≥600dp) + Flip Cover Compact + One-Handed** | Fixed phone layout | Varies by OEM |
 | **AI Model Choice** | **300+ Models (Gemini, Claude, Llama, DeepSeek, GPT)** | Locked to 1 vendor-chosen model | None or single vendor ecosystem |
 | **Free AI Tier Support** | **Native `⚡ Free Models Only` Filter** | ❌ Paywalled after 3–5 trials | ❌ Varies |
-| **Streaming Architecture** | **Direct Ktor SSE Token-by-Token Typewriter** | Buffered / high-latency proxy | Non-streaming |
-| **Host-App Tone Awareness** | **Auto-detects WhatsApp, Slack, Gmail, X, etc.** | Manual selection only | ❌ None |
+| **Email & Productivity Suite** | **32 Built-In Actions + Custom Prompt Builder** | Basic rewrite only | ❌ None |
 | **API Key Storage** | **Hardware Keystore AES-256-GCM (Fail-Closed)** | Stored on vendor backend | N/A |
-| **UI Rendering Engine** | **100% Jetpack Compose inside Lifecycle IME** | Legacy XML / WebView hybrids | Legacy `KeyboardView` / XML |
-
-### Core Feature Highlights
-
-* **🎹 Low-Latency Normalized QWERTY / Symbols Grid:** Multi-page character and symbol layouts (`QWERTY`, `SYMBOLS_PAGE_1`, `SYMBOLS_PAGE_2`), one-shot Shift, double-tap Caps Lock, surrogate-pair emoji deletion, and cancellation-safe multi-touch handling.
-* **⚡ Spacebar Trackpad Cursor Glide:** Drag horizontally across the spacebar to scrub the text cursor character-by-character with crisp `CLOCK_TICK` haptic feedback.
-* **⌫ Accelerated Swipe & Hold Backspace:** Hold or swipe left on Backspace for accelerated word-by-word deletion (`deleteWordBeforeCursor`) with synchronized tactile ticks.
-* **🎭 21 Built-In AI Action Prompts + Custom Prompt Studio:** Pre-seeded in Room across **Productivity**, **Humor & Vibes**, **Styles**, and **Translation**, plus support for creating your own persistent custom prompts and global AI system directives.
-* **🔄 3-Model Latency-Routed Fallback Hierarchy:** Automatically pairs your active model with up to 2 fallback models (`ProviderRoutingDto(sort = "latency", allowFallbacks = true)`) so rate limits or provider downtime never interrupt your workflow.
-* **🔍 Instant Full-Text Model Search (Room FTS4):** Search 300+ OpenRouter models offline in milliseconds using SQLite `@Fts4` indexing (`models_fts`), complete with live pricing, context window badges, and 1-tap pinning.
 
 ---
 
@@ -115,19 +117,19 @@ flowchart TB
         InsetsHost["ImeInsetsHost (Native FrameLayout)\nPre-Draw WindowInsets Reconciliation"]
     end
 
-    subgraph UILayer["100% Jetpack Compose UI Layer"]
-        RootView["KeyboardRootView\n(Consistent Height Container & Mode Router)"]
-        CommandBar["AICommandBar (48dp)\nAI Trigger • Live Offline Suggestions • Inline Model Pill • Hide IME"]
-        KeyGrid["KeyboardGridView & KeyView\nNormalized Grid • Spacebar Trackpad • Accelerated Backspace"]
-        AIPanel["AIPromptSelectionPanel\n21 Built-In Actions • Custom Prompt Studio"]
+    subgraph UILayer["100% Jetpack Compose Adaptive UI Layer"]
+        RootView["KeyboardRootView\nPosture Resolver (Standard • One-Handed • Flip Cover • Foldable Split)"]
+        CommandBar["AICommandBar (48dp)\nAI Trigger • Live Suggestions • One-Handed/Split Toggle • Hide IME"]
+        KeyGrid["KeyboardGridView & KeyView\nNormalized/Split Grid • Dual Spacebars • Spacebar Trackpad"]
+        AIPanel["AIPromptSelectionPanel\n32 Built-In Actions • Auto Email Mode • Custom Prompt Studio"]
         StreamCard["AIStreamingPreviewCard\nReal-Time Typewriter SSE Token Preview • Replace / Insert / Copy"]
         ModelSwitcher["InlineModelQuickSwitcher\nFTS4 Search • Free-Only Filter • Pinned Models"]
     end
 
-    subgraph DomainState["State & Typing Domain Layer"]
+    subgraph DomainState["State, Key Memory & Typing Domain Layer"]
         ViewModel["KeyboardViewModel\nImmutable StateFlow<KeyboardUiState>"]
-        TypingCtrl["TypingController & InputFieldPolicy\nComposing Word Tracking • Spacebar Autocorrect • Backspace Undo"]
-        SuggestEngine["SuggestionEngine (100% Offline)\n100k+ SCOWL Words • Binary Search + 1-Edit Distance Ranking"]
+        TypingCtrl["TypingController & InputFieldPolicy\nWord/Bigram Tracking • Spacebar Autocorrect • Backspace Undo"]
+        SuggestEngine["SuggestionEngine + KeyMemoryStore (100% Offline)\n100k+ SCOWL Words • User Unigrams & Bigrams • QWERTY Spatial Edits"]
         Haptics["HapticManager\nHardware KEYBOARD_TAP / CLOCK_TICK + 1-100% Amplitude Scaling"]
     end
 
@@ -167,70 +169,11 @@ flowchart TB
     Repo --> Keystore
 ```
 
-### Project Package Structure
-
-```text
-com.supakeyboard.neuralkey/
-├── NeuralKeyApplication.kt                  # Application singleton, DI graph & async SCOWL dictionary loader
-├── data/
-│   ├── db/
-│   │   ├── NeuralKeyDatabase.kt             # Room v2 database with pre-seeded default AI prompts callback
-│   │   ├── dao/
-│   │   │   ├── ModelDao.kt                  # FTS4 search queries, free-only filters & pin state persistence
-│   │   │   └── UserPromptDao.kt             # CRUD operations for built-in and custom user AI prompts
-│   │   └── entity/
-│   │       ├── OpenRouterModelEntity.kt     # Cached model metadata, pricing calculation & context window
-│   │       ├── OpenRouterModelFtsEntity.kt  # @Fts4 virtual table indexing model name and description
-│   │       └── UserPromptEntity.kt          # 21 pre-seeded prompts across 4 categories + custom prompts
-│   ├── network/
-│   │   ├── OpenRouterApiClient.kt           # Ktor 3 OkHttp engine, ByteReadChannel SSE parser & retry backoff
-│   │   ├── SystemPromptBuilder.kt           # Host-app package classifier & strict zero-filler prompt builder
-│   │   └── model/                           # Kotlinx Serialization DTOs (ChatCompletion, KeyAuth, Models)
-│   ├── preferences/
-│   │   └── KeyboardPreferences.kt           # Reactive Jetpack DataStore for themes, haptics, models & switches
-│   ├── repository/
-│   │   └── OpenRouterRepository.kt          # Unified data coordinator, 24h cache TTL & 3-model fallback builder
-│   └── security/
-│       └── SecureKeyStorage.kt              # Fail-closed Android Keystore AES-256-GCM EncryptedSharedPreferences
-├── ime/
-│   ├── NeuralKeyInputMethodService.kt       # Core IME service, MVI intent router & InputConnection bridge
-│   ├── KeyboardViewModel.kt                 # Lifecycle-scoped MVI state machine & coroutine stream manager
-│   ├── haptics/
-│   │   └── HapticManager.kt                 # VibratorManager / HapticFeedbackConstants with 1-100% scaling
-│   ├── keyboard/
-│   │   ├── KeyDefinition.kt                 # Normalized key descriptors, codes, widths & functional types
-│   │   ├── KeyboardLayouts.kt               # QWERTY, Symbols Page 1 & Symbols Page 2 layout definitions
-│   │   ├── KeyboardGridView.kt              # Compose row/key layout renderer
-│   │   └── KeyView.kt                       # Pointer input gesture detector (tap, repeat, spacebar glide)
-│   ├── lifecycle/
-│   │   └── LifecycleInputMethodService.kt   # Bridges InputMethodService to Lifecycle, ViewModelStore & SavedState
-│   ├── mvi/
-│   │   └── KeyboardState.kt                 # Immutable KeyboardUiState, KeyboardMode & KeyboardIntent sealed types
-│   ├── theme/
-│   │   ├── KeyboardTheme.kt                 # 9 curated theme specifications & color tokens
-│   │   └── DynamicKeyboardTheme.kt          # Android 12+ Material You dynamic wallpaper color extraction
-│   ├── typing/
-│   │   ├── InputFieldPolicy.kt              # Password/URI/Email InputType bitmask analyzer
-│   │   ├── SuggestionEngine.kt              # Offline SCOWL binary search + 1-edit Damerau-Levenshtein engine
-│   │   └── TypingController.kt              # Word boundary tracker, spacebar autocorrect & backspace undo state
-│   └── ui/
-│       ├── ImeInsetsHost.kt                 # Native FrameLayout reconciling navigation, caption & cutout insets
-│       ├── KeyboardRootView.kt              # Mode-switching root surface with locked height stability
-│       ├── AICommandBar.kt                  # Shared 48dp command bar, suggestion strip & model pill
-│       ├── AIPromptSelectionPanel.kt        # Categorized 2-column prompt studio & custom instruction runner
-│       ├── AIStreamingPreviewCard.kt        # Live token streaming card with Replace / Insert / Copy actions
-│       └── InlineModelQuickSwitcher.kt      # In-keyboard model search & free-tier filter overlay
-└── ui/settings/
-    └── SettingsActivity.kt                  # Edge-to-edge companion app (Setup Wizard, Models, Themes, Prefs)
-```
-
 ---
 
-## 🧠 Deep Dive: Context-Aware AI Engine & SSE Streaming
+## 🧠 Deep Dive: Context-Aware AI Engine, Email Suite & SSE Streaming
 
 ### Real-Time Token Streaming Pipeline
-
-When you trigger an AI action on your current text draft or selection, NeuralKey executes a deterministic, race-condition-safe pipeline:
 
 ```mermaid
 sequenceDiagram
@@ -245,7 +188,7 @@ sequenceDiagram
     participant Ktor as OpenRouterApiClient (Ktor SSE)
     participant OR as OpenRouter API (300+ LLMs)
 
-    User->>UI: Tap AI Action (e.g., "Executive Polish")
+    User->>UI: Tap AI Action (e.g., "Cold Outreach Email")
     UI->>IME: KeyboardIntent.TriggerAIAction(prompt)
     IME->>Policy: isSensitive(editorInfo.inputType)?
     alt Sensitive Field (Password / PIN)
@@ -257,7 +200,7 @@ sequenceDiagram
         IME->>VM: triggerAIAction(prompt, draft)
         VM->>Repo: streamAIAction(instruction, draft, targetPackageName)
         Repo->>Prompt: buildSystemPrompt(instruction, packageName, customRules)
-        Prompt-->>Repo: Context-Aware System Prompt (e.g., WhatsApp vs Gmail tone)
+        Prompt-->>Repo: Context-Aware System Prompt (e.g., Gmail vs WhatsApp tone)
         Repo->>Ktor: streamChatCompletion(models=[Primary, Fallback1, Fallback2], stream=true)
         Ktor->>OR: POST /api/v1/chat/completions (Provider sort="latency")
         loop Server-Sent Events (data: {...})
@@ -273,74 +216,86 @@ sequenceDiagram
     end
 ```
 
-### Automatic Host-Application Tone Adaptation (`SystemPromptBuilder`)
+### 🎭 32 Built-In AI Action Prompts Across 6 Categories
 
-NeuralKey inspects `EditorInfo.packageName` on every `onStartInput` event and classifies the active host app into one of **6 context profiles**, automatically tailoring the LLM's output tone while enforcing strict **Zero-Conversational-Filler** rules (never outputting *"Sure! Here is your rewritten text:"*):
-
-| Host App Category | Detected Package Signatures | Automatic Tone Directive |
-| :--- | :--- | :--- |
-| **💬 Messaging** | `whatsapp`, `telegram`, `signal`, `viber`, `messenger`, `line`, `wechat`, `kakao` | *Conversational, concise, and natural* |
-| **💼 Professional** | `slack`, `teams`, `linkedin`, `zoom`, `skype` | *Professional, polished, and courteous* |
-| **📧 Email Client** | `gm` (Gmail), `mail`, `outlook`, `k9`, `spark`, `thunderbird` | *Formal, structured, and clear* |
-| **📱 Social Media** | `twitter`, `x.android`, `instagram`, `facebook`, `reddit`, `threads`, `tiktok` | *Punchy, engaging, and expressive* |
-| **🌐 Browser / Search** | `chrome`, `firefox`, `browser`, `opera`, `edge` | *Concise and direct* |
-| **📝 General** | All other Android packages | *Balanced, clear, and direct* |
-
-### 🎭 21 Pre-Seeded AI Action Prompts Across 4 Categories
-
-All 21 built-in actions are seeded into `NeuralKeyDatabase` (`user_prompts` table) on first launch and can be augmented with unlimited custom prompts:
+When opened inside an email app (`Gmail`, `Outlook`, `Thunderbird`, `Spark`), NeuralKey automatically activates **✉️ Email Mode** and surfaces the **Email & Drafts** category first:
 
 <details>
-<summary><b>📋 View All 21 Built-In AI Prompts & Instructions (Click to Expand)</b></summary>
+<summary><b>📋 View All 32 Built-In AI Prompts & Instructions (Click to Expand)</b></summary>
 
 <br />
 
 | # | Category | Action Title | System Task Specification |
 | :-: | :--- | :--- | :--- |
-| 1 | **Productivity** | **Polish** | Elevate phrasing, enhance flow, and improve clarity while keeping the exact meaning and tone intact. |
-| 2 | **Productivity** | **Fix Grammar** | Correct all spelling, grammatical, punctuation, and capitalization errors without altering intended meaning. |
-| 3 | **Productivity** | **Professional** | Rewrite into a courteous, polished, and professional tone suitable for workplace or client communication. |
-| 4 | **Productivity** | **TL;DR Crisp** | Condense into a punchy, ultra-concise summary of 1–2 sentences max. |
-| 5 | **Productivity** | **Diplomatic** | Soften message to be exceptionally polite, constructive, and conflict-diffusing while preserving boundaries. |
-| 6 | **Productivity** | **Bullet Points** | Structure draft into clean, formatted bullet points with clear takeaways or action items. |
-| 7 | **Productivity** | **Explain Like I'm 5** | Rewrite in extremely simple, friendly, everyday words that a 5-year-old could easily understand. |
-| 8 | **Humor & Vibes** | **Playful Roast** | Rewrite with witty, sharp, comedic banter and playful roast energy without being genuinely malicious. |
-| 9 | **Humor & Vibes** | **Sarcastic & Dry** | Rewrite dripping with clever, dry, deadpan sarcasm and subtle irony while communicating the essential point. |
-| 10 | **Humor & Vibes** | **Gen-Z Slang** | Rewrite into modern Gen-Z / internet slang (*no cap, fr fr, high key, main character, bet*) with emojis. |
-| 11 | **Humor & Vibes** | **Shakespearean** | Translate into dramatic, grand Elizabethan English complete with poetic rhetoric and theatrical flair. |
-| 12 | **Humor & Vibes** | **Pirate Talk** | Rewrite in authentic, colorful, swashbuckling pirate vernacular with nautical terms and hearty enthusiasm. |
-| 13 | **Humor & Vibes** | **Cyberpunk 2077** | Rewrite as a gritty, neon-soaked cyberpunk comms transmission from an underworld netrunner. |
-| 14 | **Styles** | **Casual & Chill** | Rewrite into a relaxed, friendly, effortless conversational chat tone for texting friends or informal DMs. |
-| 15 | **Styles** | **Charming & Smooth** | Rewrite with effortless charm, subtle wit, warm charisma, and engaging banter. |
-| 16 | **Styles** | **Maximum Hype** | Inject explosive energy, massive excitement, bold motivational drive, and celebratory vibes. |
-| 17 | **Styles** | **Stoic / Zen** | Rewrite from a calm, grounded Stoic philosophy perspective: rational, unbothered, and composed. |
-| 18 | **Translation** | **Translate to English** | Translate into fluent, natural, idiomatic English. |
-| 19 | **Translation** | **Translate to Spanish** | Translate into natural, fluent Spanish (*Español*). |
-| 20 | **Translation** | **Translate to French** | Translate into elegant, natural French (*Français*). |
-| 21 | **Translation** | **Translate to Japanese** | Translate into polite, natural Japanese (*日本語*). |
+| 1 | **Email & Drafts** | **Reply: Confirm & Accept** | Transform notes/draft into a warm, structured professional email reply confirming receipt, accepting the proposal/meeting, and stating next steps. |
+| 2 | **Email & Drafts** | **Reply: Polite Decline** | Draft a gracious, diplomatic email reply that politely declines the request or proposal while preserving goodwill. |
+| 3 | **Email & Drafts** | **Cold Outreach Email** | Turn notes into a concise, high-converting executive cold outreach email with a compelling hook, value proposition, and low-friction CTA. |
+| 4 | **Email & Drafts** | **Follow-Up Nudge** | Write a courteous, action-oriented follow-up email checking in on a previous thread or pending deliverable without sounding pushy. |
+| 5 | **Email & Drafts** | **Meeting Recap & Actions** | Transform rough meeting notes into a structured executive recap email with Summary, Key Decisions, and Action Items with Owners. |
+| 6 | **Email & Drafts** | **Subject Line Generator** | Generate 3 high-impact email subject lines (Executive, Urgent/Direct, Conversational) plus a 1-line preview text. |
+| 7 | **Productivity** | **Polish** | Elevate phrasing, enhance flow, and improve clarity while keeping the exact meaning and tone intact. |
+| 8 | **Productivity** | **Fix Grammar** | Correct all spelling, grammatical, punctuation, and capitalization errors without altering intended meaning. |
+| 9 | **Productivity** | **Professional** | Rewrite into a courteous, polished, and professional tone suitable for workplace or client communication. |
+| 10 | **Productivity** | **TL;DR Crisp** | Condense into a punchy, ultra-concise summary of 1–2 sentences max. |
+| 11 | **Productivity** | **Diplomatic** | Soften message to be exceptionally polite, constructive, and conflict-diffusing while preserving boundaries. |
+| 12 | **Productivity** | **Bullet Points** | Structure draft into clean, formatted bullet points with clear takeaways or action items. |
+| 13 | **Productivity** | **Explain Like I'm 5** | Rewrite in extremely simple, friendly, everyday words that a 5-year-old could easily understand. |
+| 14 | **Smart Writing** | **Expand & Elaborate** | Expand shorthand notes or a brief thought into a well-structured, articulate, and persuasive paragraph. |
+| 15 | **Smart Writing** | **Brainstorm 5 Angles** | Generate 5 distinct, creative angles, hooks, or strategic approaches in numbered bullet points. |
+| 16 | **Smart Writing** | **Pros, Cons & Risks** | Analyze the proposal or idea and output a structured breakdown of Pros, Cons, and Potential Blind Spots / Risks. |
+| 17 | **Smart Writing** | **Bug / Jira Spec** | Convert a rough issue or feature description into a structured software engineering ticket with Summary, Steps, and Acceptance Criteria. |
+| 18 | **Humor & Vibes** | **Playful Roast** | Rewrite with witty, sharp, comedic banter and playful roast energy without being genuinely malicious. |
+| 19 | **Humor & Vibes** | **Sarcastic & Dry** | Rewrite dripping with clever, dry, deadpan sarcasm and subtle irony while communicating the essential point. |
+| 20 | **Humor & Vibes** | **Gen-Z Slang** | Rewrite into modern Gen-Z / internet slang (*no cap, fr fr, high key, main character, bet*) with emojis. |
+| 21 | **Humor & Vibes** | **Shakespearean** | Translate into dramatic, grand Elizabethan English complete with poetic rhetoric and theatrical flair. |
+| 22 | **Humor & Vibes** | **Pirate Talk** | Rewrite in authentic, colorful, swashbuckling pirate vernacular with nautical terms and hearty enthusiasm. |
+| 23 | **Humor & Vibes** | **Cyberpunk 2077** | Rewrite as a gritty, neon-soaked cyberpunk comms transmission from an underworld netrunner. |
+| 24 | **Styles** | **Casual & Chill** | Rewrite into a relaxed, friendly, effortless conversational chat tone for texting friends or informal DMs. |
+| 25 | **Styles** | **Charming & Smooth** | Rewrite with effortless charm, subtle wit, warm charisma, and engaging banter. |
+| 26 | **Styles** | **Maximum Hype** | Inject explosive energy, massive excitement, bold motivational drive, and celebratory vibes. |
+| 27 | **Styles** | **Stoic / Zen** | Rewrite from a calm, grounded Stoic philosophy perspective: rational, unbothered, and composed. |
+| 28 | **Translation** | **Translate to English** | Translate into fluent, natural, idiomatic English. |
+| 29 | **Translation** | **Translate to Spanish** | Translate into natural, fluent Spanish (*Español*). |
+| 30 | **Translation** | **Translate to French** | Translate into elegant, natural French (*Français*). |
+| 31 | **Translation** | **Translate to German** | Translate into natural, fluent, idiomatic German (*Deutsch*). |
+| 32 | **Translation** | **Translate to Japanese** | Translate into polite, natural Japanese (*日本語*). |
 
 </details>
 
 ---
 
-## 📚 Deep Dive: 100% Offline SCOWL Typing & Autocorrect Engine
+## 📚 Deep Dive: Adaptive Key Memory & Offline SCOWL Engine
 
-Everyday typing should never depend on an internet connection or leak keystrokes to the cloud. NeuralKey ships with a compressed **100,000+ word SCOWL (Spell Checker Oriented Word Lists) English dictionary** (`assets/english_words.dict`) loaded asynchronously at application startup.
+NeuralKey combines a bundled **100,000+ word SCOWL English dictionary** (`assets/english_words.dict`) with an on-device **Adaptive Key Memory Engine** (`KeyMemoryStore` + `SuggestionEngine`):
 
-1. **Zero-Latency Prefix Binary Search + Edit-Distance Ranking (`SuggestionEngine`):**
-   - Publishes the user's exact literal token immediately on the UI thread so the suggestion bar never lags behind fast typing.
-   - Computes completions on `Dispatchers.Default` via binary search over `sortedWords`, combined with **Damerau-Levenshtein 1-edit operations** (deletions, adjacent transpositions, character substitutions, and insertions) filtered against the dictionary hash set and ranked by word frequency (`commonWords`).
-2. **Conservative Spacebar Auto-Replacement:**
-   - Only high-confidence typology fixes (90+ curated instant contractions/typos like `teh` $\rightarrow$ `the`, `dont` $\rightarrow$ `don't`, `recieve` $\rightarrow$ `receive`) or unambiguous **single-candidate** 1-edit matches from the high-frequency vocabulary auto-replace on space.
-   - Capitalized proper nouns, acronyms, and technical terms are never aggressively overwritten.
-3. **Single-Backspace Undo (`TypingController`):**
-   - Pressing `⌫ Backspace` immediately after an automatic spacebar correction atomically replaces the corrected word with the user's exact original characters via `InputConnection.beginBatchEdit()` / `endBatchEdit()`.
+1. **On-Device Unigram & Custom Casing Memory (`recordWord`):**
+   - Learns words you type or select in normal text fields (strictly disabled in password, URI, and email fields via `InputFieldPolicy`).
+   - Remembers custom proper nouns, names, and technical terms (preserving custom capitalization like `"NeuralKey"`) and protects your learned words from ever being mistakenly autocorrected away.
+2. **Contextual Bigram Next-Word Prediction (`nextWordSuggestions`):**
+   - Learns word-pair transitions (`previousWord -> nextWord`) alongside built-in conversational/business bigrams (e.g., `"thank" -> "you"`, `"looking" -> "forward"`, `"best" -> "regards"`).
+   - Immediately after pressing Space, the toolbar displays the top 3 predicted next words for 1-tap insertion.
+3. **QWERTY Spatial Proximity Typo Ranking (`isQwertyNeighborSubstitution`):**
+   - When evaluating 1-edit substitution candidates (e.g., `hellp` $\rightarrow$ `hello`), substitutions involving physically adjacent keys on the QWERTY grid are ranked ahead of distant key substitutions.
+4. **Single-Backspace Undo (`TypingController`):**
+   - Pressing `⌫ Backspace` immediately after an automatic spacebar correction atomically restores your exact original spelling, rolls back the replacement from Key Memory, and learns your original word instead.
+
+---
+
+## 📱 Deep Dive: One-Handed Mode & Foldable / Flip Posture Engine
+
+NeuralKey adapts dynamically to every modern Android form factor via `resolveDevicePosture`:
+
+| Device Form Factor / Posture | Trigger Condition | Adaptive Layout Behavior |
+| :--- | :--- | :--- |
+| **📱 Standard Phone (Full Width)** | Portrait `< 600dp` width | Full-width normalized QWERTY grid with 1-tap One-Handed toggle (`PhonelinkSetup` icon) on the command bar. |
+| **🤚 One-Handed Mode (`LEFT` / `RIGHT`)** | User-selected via Toolbar or Settings | Compacts the keyboard to **82% width** anchored to the left or right thumb edge, with an **18% quick-action dock** to flip hands (`◀` / `▶`) or expand to full width (`⤢`). |
+| **📖 Unfolded Foldable / Tablet (`FOLDABLE_UNFOLDED`)** | `width >= 600dp` & `height >= 480dp` | Automatically activates the **Ergonomic Thumb-Split Layout** (`Q W E R T` \| gap \| `Y U I O P`) with **dual left/right spacebars** and an inline split-toggle icon on the command bar. |
+| **📟 Flip Phone Cover Screen (`FLIP_COVER_COMPACT`)** | `height <= 440dp` portrait | Compacts key rows to `178dp` total grid height so Galaxy Z Flip / Motorola Razr cover displays keep the host text box unobstructed. |
+| **🔄 Landscape Multi-Window (`LANDSCAPE_COMPACT`)** | `ORIENTATION_LANDSCAPE` | Disables fullscreen IME takeover (`onEvaluateFullscreenMode() = false`) and compacts grid height to `150dp`. |
 
 ---
 
 ## 📐 Deep Dive: OEM WindowInsets Reconciliation (`ImeInsetsHost`)
-
-One of the hardest problems in Android IME engineering is preventing bottom key rows from overlapping system navigation bars, gesture pills, or OEM IME caption bars (especially on **Samsung One UI** and **Android 15+ edge-to-edge** windows), where child `WindowInsets` may arrive late or be consumed by the OEM decor view before reaching Jetpack Compose.
 
 ```mermaid
 flowchart LR
@@ -354,14 +309,11 @@ flowchart LR
     G -- "No" --> I["Render Compose Keyboard Frame"]
 ```
 
-- **No Double Padding:** Subtracting `(rootBottom - hostBottom)` ensures that if the OEM window already shifted the IME upward, `ImeInsetsHost` does not add duplicate bottom padding.
-- **Protected Hit Targets:** `clipToPadding = true` ensures system navigation areas remain strictly outside key touch boundaries while preserving Android's native IME switcher and hide controls.
-
 ---
 
-## 🎨 Theme Gallery & Tactile Hardware Haptics
+## 🎨 15 Flagship Themes & Tactile Hardware Haptics
 
-NeuralKey includes **9 instant-switching themes** with zero-restart reactivity and a live interactive preview mockup inside the Settings dashboard:
+NeuralKey includes **15 instant-switching themes** with zero-restart reactivity and an interactive physics preview mockup inside the Settings dashboard:
 
 | Theme | ID | Style | Primary Accent | Secondary Accent | Visual Character |
 | :--- | :--- | :---: | :---: | :---: | :--- |
@@ -373,71 +325,58 @@ NeuralKey includes **9 instant-switching themes** with zero-restart reactivity a
 | 🌅 **Sunset Horizon** | `SUNSET_HORIZON` | Dark | `#FB7185` | `#FBBF24` | Warm twilight dusk fading into coral pink and golden amber. |
 | 💚 **Emerald Matrix** | `EMERALD_MATRIX` | Dark | `#10B981` | `#34D399` | Futuristic terminal obsidian with glowing radioactive green. |
 | 🌌 **Deep Space** | `DEEP_SPACE` | Dark | `#7C4DFF` | `#00E5FF` | Cosmic nebula dark navy with royal ultraviolet & pulsar cyan. |
+| 🧛 **Dracula Pro** | `DRACULA_PRO` | Dark | `#BD93F9` | `#FF79C6` | Gothic midnight slate with electric vampire purple & neon pink. |
+| ❄️ **Nordic Frost** | `NORDIC_FROST` | Dark | `#88C0D0` | `#81A1C1` | Arctic polar night slate with glacial ice cyan & frost blue. |
+| ☕ **Mocha Espresso** | `MOCHA_ESPRESSO` | Dark | `#FAB387` | `#CBA6F7` | Cozy dark-roast espresso with warm caramel peach & soft lavender. |
+| 🏎️ **Carbon Titanium** | `CARBON_TITANIUM` | Dark / Stealth | `#FF6B00` | `#F59E0B` | Brushed stealth gunmetal carbon with hyper-orange mechanical legends. |
+| 🌊 **Abyssal Biolume** | `ABYSSAL_BIOLUME` | Dark | `#00F5D4` | `#FF5E7E` | Deep ocean trench midnight teal with bioluminescent aqua & coral. |
+| 🌹 **Rose Quartz** | `ROSE_QUARTZ` | Light Studio | `#E11D48` | `#FB7185` | Soft luxury daylight blush studio with crimson rose accents. |
 | ☀️ **Chalk Studio** | `CHALK_STUDIO` | Light Studio | `#2563EB` | `#0EA5E9` | Clean Scandinavian daylight studio with royal blue accents. |
-
-### 📳 Hardware-Calibrated Haptics (`HapticManager`)
-- **Key Tap:** Uses hardware `HapticFeedbackConstants.KEYBOARD_TAP` or custom `VibrationEffect.createOneShot(15ms, amplitude)` scaled dynamically from **1% to 100%** (`1..255` hardware amplitude).
-- **Spacebar Cursor Scrubbing:** Ultra-crisp `8ms` `CLOCK_TICK` micro-pulses per character step.
-- **Long-Press Actions:** Distinct `35ms` heavy tactile pulse.
 
 ---
 
 ## 🔒 Defense-in-Depth Security & Privacy Architecture
 
-> [!NOTE]
-> A keyboard is the most trusted component on a mobile device. NeuralKey is engineered with **fail-closed security guarantees** that are verifiable directly in the source code.
-
 1. **Hardware-Backed Keystore Encryption (`SecureKeyStorage.kt`):**
-   - Your OpenRouter API key is encrypted using an Android Keystore `MasterKey` (`AES256_GCM`) inside `EncryptedSharedPreferences` (`AES256_SIV` key encryption + `AES256_GCM` value encryption).
-   - **Fail-Closed Guarantee:** If hardware encryption is unavailable, `SecureKeyStorage` refuses to save the key—it **never** falls back to plaintext `SharedPreferences`.
+   - Your OpenRouter API key is encrypted using an Android Keystore `MasterKey` (`AES256_GCM`) inside `EncryptedSharedPreferences` (`AES256_SIV` key encryption + `AES256_GCM` value encryption) with a strict **fail-closed guarantee**.
 2. **Zero Cloud Backup or Device-Transfer Exfiltration (`data_extraction_rules.xml`):**
    - Explicitly excludes `root`, `file`, `database`, `sharedpref`, and `external` domains from both Android `<cloud-backup>` and `<device-transfer>`.
 3. **Password & Sensitive Input Isolation (`InputFieldPolicy.kt`):**
-   - Inspects `InputType` bitmasks on every field focus. Password fields (`TYPE_TEXT_VARIATION_PASSWORD`, `VISIBLE_PASSWORD`, `WEB_PASSWORD`, `TYPE_NUMBER_VARIATION_PASSWORD`) strictly block `extractCurrentDraft()`, AI menu opening, and word suggestions.
+   - Blocks draft extraction, AI menu actions, Key Memory learning, and word suggestions inside all password, email, and URI fields.
 4. **Stale-Draft Mutation Protection:**
-   - Before replacing text with an AI completion, `NeuralKeyInputMethodService` verifies `extractCurrentDraft() == streamingState.originalText`. If you switched fields or edited the text while tokens were streaming, NeuralKey aborts the replacement rather than corrupting your input field.
+   - Verifies `extractCurrentDraft() == streamingState.originalText` before applying any AI replacement.
 
 ---
 
 ## 🚀 Installation & Zero-Cost Setup Guide
 
 ### Step 1: Download & Install the APK
-1. Go to the [**GitHub Releases Page**](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest) and download `NeuralKey-AI-Keyboard-v1.1.1.apk`.
-2. *(Optional)* Verify the download integrity against `SHA256SUMS.txt` attached to the release:
+1. Go to the [**GitHub Releases Page**](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest) and download `NeuralKey-AI-Keyboard-v1.2.0.apk`.
+2. Verify the download integrity against `SHA256SUMS.txt` if desired:
    ```bash
    sha256sum -c SHA256SUMS.txt
    ```
 3. Install the APK on your Android device (**Android 11 / API 30 or higher**).
-   > **Upgrading from an older build?** Because current builds are CI debug-signed development APKs, if Android reports a signature conflict during an update, uninstall the previous version first and then install `v1.1.1`.
 
 ### Step 2: Activate via the 2-Step Wizard
-1. Open the **NeuralKey AI** app from your launcher.
-2. Under the **Setup** tab:
-   - Tap **Step 1 ("Enable in Settings")** and toggle on **NeuralKey AI Keyboard**.
-   - Tap **Step 2 ("Switch Input Method")** and select **NeuralKey AI** as your active keyboard.
+1. Open **NeuralKey AI** from your app launcher.
+2. Under the **Setup** tab, complete **Step 1 ("Enable")** and **Step 2 ("Select")**.
 
 ### Step 3: Use AI for 100% Free ($0.00 Setup)
 1. Create a free account at [OpenRouter.ai](https://openrouter.ai/keys) and generate an API key (`sk-or-v1-...`) — **no credit card or paid balance is required to use `:free` models!**
-2. Paste your key into the **OpenRouter API Key** card in NeuralKey and tap **Save Key**.
-3. Switch to the **Models** tab (or tap the model pill directly on the keyboard toolbar), tap **`Sync Live`**, enable the **`⚡ Free Models Only`** filter chip, and select any `FREE` model (such as `google/gemini-2.0-flash-exp:free`, `meta-llama/llama-3.3-70b-instruct:free`, or `mistralai/mistral-7b-instruct:free`).
+2. Paste your key into the **OpenRouter API Vault** card and tap **Save Key**.
+3. Open the **Models** tab, tap **`Sync Live`**, toggle **`⚡ Free Models Only`**, and select any `FREE ($0.00)` model.
 
 ---
 
 ## 🛠️ Building from Source & CI Verification Suite
-
-### Prerequisites
-- **JDK 17** (Eclipse Temurin 17 recommended)
-- **Android SDK 36** (`platforms;android-36`, `build-tools;36.0.0`, `minSdk = 30`)
-- **Gradle 8.11+** (via included `./gradlew` wrapper)
-
-### Build Commands
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/rzrmayur/NeuralKey-AI-Keyboard.git
 cd NeuralKey-AI-Keyboard
 
-# 2. Run the full automated unit, Robolectric layout, gesture & inset test suite
+# 2. Run the full automated unit, Key Memory, Robolectric layout, foldable & inset test suite
 ./gradlew :app:testDebugUnitTest
 
 # 3. Run Android Lint static analysis
@@ -445,24 +384,18 @@ cd NeuralKey-AI-Keyboard
 
 # 4. Assemble the installable Debug APK
 ./gradlew :app:assembleDebug
-# Output: app/build/outputs/apk/debug/app-debug.apk
-
-# 5. Assemble the R8-minified Release APK
-./gradlew :app:assembleRelease
 ```
 
 ### Automated Test & Validation Matrix
 
-Every push and pull request is validated by [`.github/workflows/android.yml`](.github/workflows/android.yml):
-
 | Test Suite | Target Component | What It Verifies |
 | :--- | :--- | :--- |
 | [`DictionaryAssetTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/typing/DictionaryAssetTest.kt) | `assets/english_words.dict` | Verifies GZIP decompression, $>100,000$ SCOWL vocabulary integrity, and bundled license notices. |
-| [`SuggestionEngineTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/typing/SuggestionEngineTest.kt) | `SuggestionEngine.kt` | Prefix completions, 1-edit typo ranking, case matching (`matchCase`), and conservative spacebar auto-correction. |
-| [`TypingControllerTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/typing/TypingControllerTest.kt) | `TypingController.kt` | Word composition tracking, spacebar replacement, single-backspace undo restoration, and cursor/selection resets. |
+| [`SuggestionEngineTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/typing/SuggestionEngineTest.kt) | `SuggestionEngine.kt` | Prefix completions, Key Memory custom vocabulary & rank boosting, contextual bigram next-word prediction, and QWERTY spatial neighbor detection. |
+| [`TypingControllerTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/typing/TypingControllerTest.kt) | `TypingController.kt` | Word composition tracking, spacebar replacement, single-backspace undo restoration, next-word selection after space, and bigram learning. |
 | [`InputFieldPolicyTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/typing/InputFieldPolicyTest.kt) | `InputFieldPolicy.kt` | Bitmask isolation for text/web/visible/numeric passwords, URIs, email fields, and `FLAG_NO_SUGGESTIONS`. |
 | [`ImeInsetsHostTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/ui/ImeInsetsHostTest.kt) | `ImeInsetsHost.kt` | Native View inset reconciliation across API 30 & 35, delayed caption-bar delivery, consumed child insets, and side cutouts. |
-| [`KeyboardLayoutTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/ui/KeyboardLayoutTest.kt) | `KeyboardRootView.kt` | Compose UI hierarchy bounds, 48dp command bar stability when suggestions appear, touch cancellation safety, and QWERTY ordering. |
+| [`KeyboardLayoutTest`](app/src/test/java/com/supakeyboard/neuralkey/ime/ui/KeyboardLayoutTest.kt) | `KeyboardRootView.kt` | 48dp command bar stability, One-Handed mode compacting & side-switching, Foldable (`w673dp-h841dp`) split layout with dual spacebars, Flip cover (`h400dp`) compact posture, 15 themes, and 32 AI prompts. |
 
 ---
 
@@ -470,16 +403,9 @@ Every push and pull request is validated by [`.github/workflows/android.yml`](.g
 
 Hi! I'm **Mayur ([@rzrmayur](https://github.com/rzrmayur))**, the creator and maintainer of **NeuralKey AI Keyboard**.
 
-### Why I Made NeuralKey Free for All
-I built **NeuralKey AI Keyboard** because I believe intelligent, privacy-respecting writing tools should be a **public good—accessible to everyone around the world for free**, regardless of whether they can afford expensive monthly AI subscriptions.
-
-By combining **100% on-device offline typing** with **direct, unthrottled access to OpenRouter's free and open-weights model ecosystem**, NeuralKey puts state-of-the-art AI right inside your keyboard with:
-- **Zero middleman markup**
-- **Zero data harvesting**
-- **100% open-source transparency**
+I built **NeuralKey AI Keyboard** because I believe intelligent, privacy-respecting writing tools should be a **public good—accessible to everyone around the world for free**, without expensive monthly AI subscriptions, middleman servers, or keystroke tracking.
 
 ### 🤝 Contributing & Community Support
-Contributions, bug reports (especially OEM-specific layout feedback such as Samsung One UI, Xiaomi HyperOS, or Pixel), new themes, and prompt ideas are warmly welcomed!
 1. **Star ⭐ this repository** to help more people discover a free, open-source AI keyboard!
 2. Open an [Issue](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/issues) for bug reports or feature requests.
 3. Submit a [Pull Request](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/pulls) with improvements.
@@ -489,4 +415,4 @@ Contributions, bug reports (especially OEM-specific layout feedback such as Sams
 ## 📄 License & Attributions
 
 - **Source Code:** Licensed under the [**Apache License, Version 2.0**](LICENSE). Free for personal, academic, and commercial use.
-- **Bundled Offline English Dictionary:** Derived from [**SCOWL (Spell Checker Oriented Word Lists)**](app/src/main/assets/licenses/english-dictionary.txt) by Kevin Atkinson and contributors. Full copyright and permissive redistribution notices are included in [`app/src/main/assets/licenses/english-dictionary.txt`](app/src/main/assets/licenses/english-dictionary.txt).
+- **Bundled Offline English Dictionary:** Derived from [**SCOWL (Spell Checker Oriented Word Lists)**](app/src/main/assets/licenses/english-dictionary.txt) by Kevin Atkinson and contributors.

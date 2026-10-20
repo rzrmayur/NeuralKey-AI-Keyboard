@@ -5,6 +5,13 @@ import androidx.compose.runtime.Stable
 import com.supakeyboard.neuralkey.data.db.entity.OpenRouterModelEntity
 import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
 
+@Immutable
+enum class OneHandedMode {
+    OFF,
+    LEFT,
+    RIGHT
+}
+
 /**
  * Sealed hierarchy of distinct operational modes for the NeuralKey keyboard.
  */
@@ -87,6 +94,9 @@ sealed interface KeyboardIntent {
     data class UpdateModelSearch(val query: String) : KeyboardIntent
     object ToggleFreeModelsOnly : KeyboardIntent
     object SwitchToNextIme : KeyboardIntent
+    data class SetOneHandedMode(val mode: OneHandedMode) : KeyboardIntent
+    object CycleOneHandedMode : KeyboardIntent
+    object ToggleSplitLayout : KeyboardIntent
     data class UpdateTargetContext(val packageName: String?, val inputType: Int, val imeAction: Int) : KeyboardIntent
     data class DraftChanged(val draftText: String) : KeyboardIntent
 }
@@ -116,6 +126,10 @@ data class KeyboardUiState(
     val suggestions: List<String> = emptyList(),
     val suggestionsEnabled: Boolean = true,
     val autoCorrectionEnabled: Boolean = true,
+    val keyMemoryEnabled: Boolean = true,
+    val nextWordPredictionEnabled: Boolean = true,
+    val oneHandedMode: OneHandedMode = OneHandedMode.OFF,
+    val splitKeyboardOnFold: Boolean = true,
     val isSensitiveField: Boolean = false,
     val errorMessage: String? = null
 )

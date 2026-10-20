@@ -12,7 +12,14 @@ interface TypingEditor {
 }
 
 class TypingController(private val engine: () -> SuggestionEngine?) {
-    private data class Undo(val original: String, val replacement: String, val before: String, val after: String)
+    private data class Undo(
+        val original: String,
+        val replacement: String,
+        val before: String,
+        val after: String,
+        val learnedWord: String? = null,
+        val previousWord: String? = null
+    )
     private var undo: Undo? = null
     private var keepOriginalOnce: String? = null
 
@@ -26,31 +33,71 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
         return token.takeIf { SuggestionEngine.isWord(it) }
     }
 
-    fun type(editor: TypingEditor, text: String, autoCorrect: Boolean) {
+    /**
+     * Extracts the completed word immediately preceding the current word (or preceding trailing spaces).
+     * Used for contextual bigram next-word prediction and Key Memory learning.
+     */
+    fun previousWord(editor: TypingEditor): String? {
+        if (editor.hasSelection()) return null
+        val before = editor.beforeCursor(128)
+        val withoutCurrent = if (before.lastOrNull()?.isWhitespace() == true) {
+            before.trimEnd()
+        } else {
+            before.dropLastWhile { !it.isWhitespace() }.trimEnd()
+        }
+        if (withoutCurrent.isEmpty()) return null
+        val rawPrev = withoutCurrent.takeLastWhile { !it.isWhitespace() }
+            .trim('(', ')', '[', ']', '{', '}', '"', '“', '”', ',', '.', ';', ':')
+        return rawPrev.takeIf { SuggestionEngine.isWord(it) }
+    }
+
+    fun type(editor: TypingEditor, text: String, autoCorrect: Boolean, learnMemory: Boolean = true) {
         undo = null
-        val word = if (autoCorrect && text == " ") currentWord(editor) else null
-        val corrected = word?.takeUnless { it == keepOriginalOnce }?.let { engine()?.correction(it) }
+        val word = if (text == " ") currentWord(editor) else null
+        val prev = if (text == " ") previousWord(editor) else null
+        val corrected = if (autoCorrect && word != null) {
+            word.takeUnless { it == keepOriginalOnce }?.let { engine()?.correction(it) }
+        } else null
         keepOriginalOnce = null
         if (word != null && corrected != null && word != corrected) {
             editor.batch {
                 editor.deleteBefore(word.length)
                 editor.commit(corrected + text)
             }
-            undo = Undo(word, corrected + text, editor.beforeCursor(128), editor.afterCursor(32))
+            if (learnMemory) engine()?.recordWord(corrected, prev)
+            undo = Undo(word, corrected + text, editor.beforeCursor(128), editor.afterCursor(32), corrected, prev)
         } else {
             editor.commit(text)
+            if (learnMemory && word != null && text == " ") {
+                engine()?.recordWord(word, prev)
+            }
         }
     }
 
-    fun choose(editor: TypingEditor, suggestion: String, candidates: List<String>): Boolean {
-        val word = currentWord(editor) ?: return false
-        if (suggestion !in candidates) return false
-        undo = null
-        editor.batch {
-            editor.deleteBefore(word.length)
-            editor.commit(suggestion + " ")
+    fun choose(editor: TypingEditor, suggestion: String, candidates: List<String>, learnMemory: Boolean = true): Boolean {
+        if (editor.hasSelection() || suggestion !in candidates) return false
+        val word = currentWord(editor)
+        val prev = previousWord(editor)
+        if (word != null) {
+            undo = null
+            editor.batch {
+                editor.deleteBefore(word.length)
+                editor.commit(suggestion + " ")
+            }
+            if (learnMemory) engine()?.recordWord(suggestion, prev)
+            return true
         }
-        return true
+        // Support selecting a next-word prediction directly after a space
+        val after = editor.afterCursor(1).firstOrNull()
+        val atWordBoundaryAfterSpace = editor.beforeCursor(1) == " " &&
+            prev != null && (after == null || after.isWhitespace())
+        if (atWordBoundaryAfterSpace) {
+            undo = null
+            editor.commit(suggestion + " ")
+            if (learnMemory) engine()?.recordWord(suggestion, prev)
+            return true
+        }
+        return false
     }
 
     fun backspace(editor: TypingEditor) {
@@ -64,6 +111,8 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
                 editor.deleteBefore(previous.replacement.length)
                 editor.commit(previous.original)
             }
+            previous.learnedWord?.let { engine()?.unlearnWord(it, previous.previousWord) }
+            engine()?.recordWord(previous.original, previous.previousWord)
             keepOriginalOnce = previous.original
         } else {
             val before = editor.beforeCursor(2)

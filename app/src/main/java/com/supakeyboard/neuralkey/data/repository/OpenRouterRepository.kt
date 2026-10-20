@@ -17,7 +17,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -121,6 +120,7 @@ class OpenRouterRepository(
 
             val activeModelId = preferences.activeModelId.first()
             val configuredFallbacks = preferences.fallbackModelIds.first()
+            val globalDirective = preferences.customSystemPrompt.first().takeIf { it.isNotBlank() }
 
             // Combine primary model with fallbacks (ensuring unique order)
             // OpenRouter API limits 'models' array to 3 items max
@@ -129,7 +129,7 @@ class OpenRouterRepository(
             val systemPrompt = SystemPromptBuilder.buildSystemPrompt(
                 actionInstruction = promptInstruction,
                 targetPackageName = targetPackageName,
-                customPromptOverride = customPromptOverride
+                customPromptOverride = customPromptOverride ?: globalDirective
             )
 
             val chatRequest = ChatCompletionRequest(
@@ -177,12 +177,18 @@ class OpenRouterRepository(
         modelDao.updatePinned(modelId, willPin)
     }
 
-    suspend fun insertUserPrompt(title: String, instruction: String, iconKey: String = "auto_fix_high") {
+    suspend fun insertUserPrompt(
+        title: String,
+        instruction: String,
+        iconKey: String = "auto_fix_high",
+        category: String = "Productivity"
+    ) {
         val count = userPromptDao.getPromptCount()
         val prompt = UserPromptEntity(
             title = title,
             promptInstruction = instruction,
             iconKey = iconKey,
+            category = category,
             orderIndex = count,
             isBuiltIn = false
         )

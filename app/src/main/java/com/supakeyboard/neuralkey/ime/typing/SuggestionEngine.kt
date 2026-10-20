@@ -1,33 +1,172 @@
 package com.supakeyboard.neuralkey.ime.typing
 
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
-/** Immutable, offline dictionary. No typed text is stored or sent to a provider. */
+/**
+ * Offline dictionary + Adaptive On-Device Key Memory (Unigram & Contextual Bigram Engine)
+ * with QWERTY spatial typo proximity ranking. No typed text is ever sent to a server.
+ */
 class SuggestionEngine(dictionary: List<String>) {
-    private val words = (dictionary + commonWords + corrections.values).toHashSet()
+    private val words = (dictionary.map { it.lowercase(Locale.ROOT) } + commonWords + corrections.values).toHashSet()
     private val sortedWords = words.sorted()
     private val ranks = commonWords.withIndex().associate { it.value to it.index }
 
-    fun suggestions(typed: String): List<String> {
+    // On-device Key Memory (user-typed frequency & contextual next-word bigrams)
+    private val userWords = ConcurrentHashMap<String, Int>()
+    private val userBigrams = ConcurrentHashMap<String, ConcurrentHashMap<String, Int>>()
+    private val userCustomCasing = ConcurrentHashMap<String, String>()
+
+    @Volatile
+    var keyMemoryEnabled: Boolean = true
+
+    @Volatile
+    var nextWordPredictionEnabled: Boolean = true
+
+    @Volatile
+    var onMemoryUpdated: ((KeyMemorySnapshot) -> Unit)? = null
+
+    fun restoreMemory(snapshot: KeyMemorySnapshot) {
+        userWords.clear()
+        userBigrams.clear()
+        userCustomCasing.clear()
+        userWords.putAll(snapshot.words)
+        snapshot.bigrams.forEach { (prev, nextMap) ->
+            userBigrams[prev] = ConcurrentHashMap(nextMap)
+        }
+        userCustomCasing.putAll(snapshot.customCasing)
+    }
+
+    fun exportMemory(): KeyMemorySnapshot = KeyMemorySnapshot(
+        words = HashMap(userWords),
+        bigrams = userBigrams.mapValues { HashMap(it.value) },
+        customCasing = HashMap(userCustomCasing)
+    )
+
+    fun clearMemory() {
+        userWords.clear()
+        userBigrams.clear()
+        userCustomCasing.clear()
+        onMemoryUpdated?.invoke(KeyMemorySnapshot())
+    }
+
+    fun learnedWordCount(): Int = userWords.size
+
+    /**
+     * Records a word typed or selected by the user into on-device Key Memory.
+     */
+    fun recordWord(word: String, previousWord: String? = null) {
+        if (!keyMemoryEnabled || !isWord(word) || word.length < 2) return
+        val lower = word.lowercase(Locale.ROOT)
+        // Do not memorize known typo keys unless user explicitly forced them multiple times
+        if (lower in corrections && (userWords[lower] ?: 0) == 0) return
+
+        userWords.compute(lower) { _, count -> (count ?: 0) + 1 }
+        if (lower !in words && word.any { it.isUpperCase() }) {
+            userCustomCasing[lower] = word
+        }
+        if (previousWord != null && isWord(previousWord) && previousWord.length >= 2) {
+            val prevLower = previousWord.lowercase(Locale.ROOT)
+            val nextMap = userBigrams.getOrPut(prevLower) { ConcurrentHashMap() }
+            nextMap.compute(lower) { _, count -> (count ?: 0) + 1 }
+        }
+        onMemoryUpdated?.invoke(exportMemory())
+    }
+
+    /**
+     * Rolls back a learned word when the user immediately presses Backspace to undo.
+     */
+    fun unlearnWord(word: String, previousWord: String? = null) {
+        if (!keyMemoryEnabled || !isWord(word)) return
+        val lower = word.lowercase(Locale.ROOT)
+        userWords.computeIfPresent(lower) { _, count -> if (count <= 1) null else count - 1 }
+        if (previousWord != null && isWord(previousWord)) {
+            val prevLower = previousWord.lowercase(Locale.ROOT)
+            userBigrams[prevLower]?.computeIfPresent(lower) { _, count -> if (count <= 1) null else count - 1 }
+        }
+        onMemoryUpdated?.invoke(exportMemory())
+    }
+
+    /**
+     * Predicts the next 3 likely words after a space based on contextual bigrams and Key Memory.
+     */
+    fun nextWordSuggestions(previousWord: String): List<String> {
+        if (!nextWordPredictionEnabled || !isWord(previousWord)) return emptyList()
+        val prevLower = previousWord.lowercase(Locale.ROOT)
+
+        val learnedNext = userBigrams[prevLower]
+            ?.entries
+            ?.sortedByDescending { it.value }
+            ?.map { it.key }
+            .orEmpty()
+
+        val builtinNext = defaultBigrams[prevLower].orEmpty()
+
+        val topPersonal = userWords.entries
+            .sortedByDescending { it.value }
+            .map { it.key }
+            .filter { it != prevLower && it.length >= 2 }
+            .take(3)
+
+        return (learnedNext + builtinNext + topPersonal)
+            .distinct()
+            .take(3)
+            .map { userCustomCasing[it] ?: it }
+    }
+
+    /**
+     * Returns up to 3 intelligent suggestions combining:
+     * 1. Exact typed token (always retained first so names/custom terms stay selectable)
+     * 2. Explicit typo fixes + Contextual bigram boost + Personal Key Memory + QWERTY spatial edits + SCOWL prefix
+     */
+    fun suggestions(typed: String, previousWord: String? = null): List<String> {
+        if (typed.isBlank()) {
+            return if (previousWord != null) nextWordSuggestions(previousWord) else emptyList()
+        }
         if (!isWord(typed)) return emptyList()
         val lower = typed.lowercase(Locale.ROOT)
+        val prevLower = previousWord?.takeIf { isWord(it) }?.lowercase(Locale.ROOT)
         val explicit = corrections[lower]
+
         val completions = mutableListOf<String>()
         var index = sortedWords.binarySearch(lower).let { if (it < 0) -it - 1 else it }
         while (index < sortedWords.size && sortedWords[index].startsWith(lower)) {
             completions += sortedWords[index++]
         }
+        // Include user-learned vocabulary prefixes not in base dictionary
+        for (learned in userWords.keys) {
+            if (learned.startsWith(lower)) completions += learned
+        }
+
         val edits = if (typed.length >= 3) edits(lower) else emptySet()
-        val candidates = (listOfNotNull(explicit) +
-            completions.sortedWith(rankOrder) + edits.sortedWith(rankOrder)).distinct()
-        // Keep the exact typed word visible, even if it is a name or technical term.
-        return (listOf(typed) + candidates.filter { it != lower }.take(2).map { matchCase(typed, it) }).take(3)
+        val comparator = contextualComparator(lower, prevLower)
+
+        val candidates = (
+            listOfNotNull(explicit) +
+            completions.distinct().sortedWith(comparator) +
+            edits.sortedWith(comparator)
+        ).distinct()
+
+        // Keep the exact typed word visible first, even if it is a name or technical term.
+        return (
+            listOf(typed) +
+            candidates.filter { it != lower }.take(2).map { candidate ->
+                val customCase = userCustomCasing[candidate]
+                if (customCase != null && typed.firstOrNull()?.isLowerCase() == true) {
+                    customCase
+                } else {
+                    matchCase(typed, candidate)
+                }
+            }
+        ).take(3)
     }
 
     fun correction(typed: String): String? {
         if (!isWord(typed) || typed.length < 3 || typed.all { !it.isLetter() || it.isUpperCase() } ||
             typed.drop(1).any { it.isUpperCase() }) return null
         val lower = typed.lowercase(Locale.ROOT)
+        // Never autocorrect a word the user has personally taught Key Memory
+        if ((userWords[lower] ?: 0) > 0) return null
         corrections[lower]?.let { return matchCase(typed, it) }
         if (lower in words || typed.length < 4 || typed.first().isUpperCase()) return null
         // Only one-edit matches from our common-word vocabulary can auto-replace.
@@ -36,7 +175,40 @@ class SuggestionEngine(dictionary: List<String>) {
         return frequent.singleOrNull()?.let { matchCase(typed, it) }
     }
 
-    private val rankOrder = compareBy<String> { ranks[it] ?: Int.MAX_VALUE }.thenBy { it.length }.thenBy { it }
+    private fun contextualComparator(typedLower: String, prevLower: String?): Comparator<String> {
+        val learnedNextMap = if (prevLower != null) userBigrams[prevLower] else null
+        val builtinNextList = if (prevLower != null) defaultBigrams[prevLower].orEmpty() else emptyList()
+
+        return Comparator { a, b ->
+            // 1. Contextual user bigram frequency following previousWord
+            val aBigram = learnedNextMap?.get(a) ?: 0
+            val bBigram = learnedNextMap?.get(b) ?: 0
+            if (aBigram != bBigram) return@Comparator bBigram.compareTo(aBigram)
+
+            // 2. Built-in bigram match following previousWord
+            val aBuiltinIdx = builtinNextList.indexOf(a).let { if (it == -1) Int.MAX_VALUE else it }
+            val bBuiltinIdx = builtinNextList.indexOf(b).let { if (it == -1) Int.MAX_VALUE else it }
+            if (aBuiltinIdx != bBuiltinIdx) return@Comparator aBuiltinIdx.compareTo(bBuiltinIdx)
+
+            // 3. Personal Key Memory unigram count
+            val aUser = userWords[a] ?: 0
+            val bUser = userWords[b] ?: 0
+            if (aUser != bUser) return@Comparator bUser.compareTo(aUser)
+
+            // 4. QWERTY spatial adjacency for same-length 1-char substitutions
+            val aSpatial = if (isQwertyNeighborSubstitution(typedLower, a)) 1 else 0
+            val bSpatial = if (isQwertyNeighborSubstitution(typedLower, b)) 1 else 0
+            if (aSpatial != bSpatial) return@Comparator bSpatial.compareTo(aSpatial)
+
+            // 5. Base common-word rank, then length, then alphabetical
+            val aRank = ranks[a] ?: Int.MAX_VALUE
+            val bRank = ranks[b] ?: Int.MAX_VALUE
+            if (aRank != bRank) return@Comparator aRank.compareTo(bRank)
+
+            val lenCmp = a.length.compareTo(b.length)
+            if (lenCmp != 0) lenCmp else a.compareTo(b)
+        }
+    }
 
     private fun edits(word: String): Set<String> = buildSet {
         for (i in word.indices) {
@@ -49,7 +221,7 @@ class SuggestionEngine(dictionary: List<String>) {
         for (i in 0..word.length) {
             for (letter in 'a'..'z') add(word.take(i) + letter + word.drop(i))
         }
-        retainAll(words)
+        retainAll { it in words || userWords.containsKey(it) }
     }
 
     companion object {
@@ -61,6 +233,61 @@ class SuggestionEngine(dictionary: List<String>) {
             typed.firstOrNull()?.isUpperCase() == true -> candidate.replaceFirstChar { it.titlecase(Locale.ROOT) }
             else -> candidate
         }
+
+        private val qwertyNeighbors: Map<Char, String> = mapOf(
+            'q' to "wa", 'w' to "qeasd", 'e' to "wsdrf", 'r' to "edftg", 't' to "rfgyh",
+            'y' to "tghuj", 'u' to "yhjik", 'i' to "ujkol", 'o' to "iklp", 'p' to "ol",
+            'a' to "qwsxz", 's' to "qweadzx", 'd' to "wersfxc", 'f' to "ertdgcv", 'g' to "rtyfhvb",
+            'h' to "tyugjbn", 'j' to "yuihknm", 'k' to "uiojlm", 'l' to "iopk",
+            'z' to "asx", 'x' to "zsdc", 'c' to "xdfv", 'v' to "cfgb", 'b' to "vghn",
+            'n' to "bhjm", 'm' to "njk"
+        )
+
+        fun isQwertyNeighborSubstitution(typed: String, candidate: String): Boolean {
+            if (typed.length != candidate.length) return false
+            var diffIndex = -1
+            for (i in typed.indices) {
+                if (typed[i] != candidate[i]) {
+                    if (diffIndex != -1) return false
+                    diffIndex = i
+                }
+            }
+            if (diffIndex == -1) return false
+            val from = typed[diffIndex]
+            val to = candidate[diffIndex]
+            return qwertyNeighbors[from]?.contains(to) == true
+        }
+
+        private val defaultBigrams: Map<String, List<String>> = mapOf(
+            "thank" to listOf("you", "goodness", "fully"),
+            "thanks" to listOf("for", "so", "again"),
+            "looking" to listOf("forward", "for", "into"),
+            "forward" to listOf("to", "this", "with"),
+            "please" to listOf("let", "find", "check"),
+            "let" to listOf("me", "us", "know"),
+            "let's" to listOf("schedule", "discuss", "make"),
+            "best" to listOf("regards", "wishes", "of"),
+            "kind" to listOf("regards", "of", "words"),
+            "warm" to listOf("regards", "wishes", "welcome"),
+            "how" to listOf("are", "is", "can"),
+            "are" to listOf("you", "we", "they"),
+            "i" to listOf("am", "have", "will"),
+            "i'm" to listOf("looking", "going", "happy"),
+            "we" to listOf("are", "will", "can"),
+            "can" to listOf("you", "we", "i"),
+            "could" to listOf("you", "we", "be"),
+            "would" to listOf("love", "like", "you"),
+            "attached" to listOf("is", "file", "document"),
+            "see" to listOf("you", "attached", "the"),
+            "talk" to listOf("soon", "to", "later"),
+            "good" to listOf("morning", "afternoon", "evening"),
+            "happy" to listOf("to", "birthday", "friday"),
+            "follow" to listOf("up", "the", "along"),
+            "following" to listOf("up", "the", "our"),
+            "schedule" to listOf("a", "the", "time"),
+            "meeting" to listOf("tomorrow", "today", "with"),
+            "hope" to listOf("you", "this", "everything")
+        )
 
         private val corrections = mapOf(
             "teh" to "the", "thsi" to "this", "taht" to "that", "adn" to "and",

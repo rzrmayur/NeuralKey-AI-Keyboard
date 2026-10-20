@@ -8,14 +8,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -26,10 +22,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -47,13 +41,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
+import com.supakeyboard.neuralkey.data.network.SystemPromptBuilder
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
 import com.supakeyboard.neuralkey.ime.theme.KeyboardTheme
 
 /**
  * Intuitive, full-keyboard replacement panel for selecting AI action prompts.
- * Replaces the cramped 52dp horizontal scroll with a crystal-clear, categorized 2-column grid.
+ * Automatically prioritizes Email & Drafts when an email client is detected.
  */
 @Composable
 fun AIPromptSelectionPanel(
@@ -62,16 +57,34 @@ fun AIPromptSelectionPanel(
     onIntent: (KeyboardIntent) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedCategory by remember { mutableStateOf("All") }
+    val hostCategory = remember(uiState.targetPackageName) {
+        SystemPromptBuilder.detectAppCategory(uiState.targetPackageName)
+    }
+    val initialCategory = remember(hostCategory) {
+        if (hostCategory == SystemPromptBuilder.HostAppCategory.EMAIL) "Email & Drafts" else "All"
+    }
+    var selectedCategory by remember(initialCategory) { mutableStateOf(initialCategory) }
     var customPromptInput by remember { mutableStateOf("") }
 
-    val categories = listOf("All", "Productivity", "Humor & Vibes", "Styles", "Translation")
+    val categories = listOf(
+        "All",
+        "Email & Drafts",
+        "Productivity",
+        "Smart Writing",
+        "Humor & Vibes",
+        "Styles",
+        "Translation"
+    )
 
-    val filteredPrompts = remember(selectedCategory, uiState.userPrompts) {
+    val allPrompts = remember(uiState.userPrompts) {
+        uiState.userPrompts.ifEmpty { UserPromptEntity.defaultPrompts() }
+    }
+
+    val filteredPrompts = remember(selectedCategory, allPrompts) {
         if (selectedCategory == "All") {
-            uiState.userPrompts
+            allPrompts
         } else {
-            uiState.userPrompts.filter { it.category.equals(selectedCategory, ignoreCase = true) }
+            allPrompts.filter { it.category.equals(selectedCategory, ignoreCase = true) }
         }
     }
 
@@ -125,6 +138,22 @@ fun AIPromptSelectionPanel(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+
+                if (hostCategory == SystemPromptBuilder.HostAppCategory.EMAIL) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF10B981).copy(alpha = 0.2f))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "✉️ Email Mode",
+                            color = Color(0xFF34D399),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
 
             // Back to Keyboard button
@@ -171,7 +200,7 @@ fun AIPromptSelectionPanel(
                 )
             } else {
                 Text(
-                    text = "💡 Type or select text first, or tap an action below to draft",
+                    text = "💡 Type notes/draft first, then tap an Email or AI tool below",
                     fontSize = 11.sp,
                     color = Color(0xFF94A3B8),
                     maxLines = 1,
@@ -190,7 +219,7 @@ fun AIPromptSelectionPanel(
         ) {
             categories.forEach { cat ->
                 val isSelected = selectedCategory == cat
-                val count = if (cat == "All") uiState.userPrompts.size else uiState.userPrompts.count { it.category.equals(cat, ignoreCase = true) }
+                val count = if (cat == "All") allPrompts.size else allPrompts.count { it.category.equals(cat, ignoreCase = true) }
                 val label = if (count > 0) "$cat ($count)" else cat
 
                 Box(
@@ -258,7 +287,7 @@ fun AIPromptSelectionPanel(
                 decorationBox = { innerTextField ->
                     if (customPromptInput.isEmpty()) {
                         Text(
-                            text = "💬 Or type custom prompt (e.g. 'Make it rhyme')...",
+                            text = "💬 Or type custom instruction (e.g. 'Reply asking for Tuesday at 2pm')...",
                             color = Color(0xFF64748B),
                             fontSize = 11.sp
                         )
@@ -339,23 +368,38 @@ private fun PromptCard(
 private fun getPromptEmoji(title: String): String {
     val t = title.lowercase()
     return when {
+        t.contains("confirm") || t.contains("accept") -> "✅"
+        t.contains("decline") -> "🛡️"
+        t.contains("cold") || t.contains("outreach") -> "🚀"
+        t.contains("follow-up") || t.contains("nudge") -> "⏰"
+        t.contains("recap") || t.contains("meeting") -> "📋"
+        t.contains("subject") -> "🎯"
+        t.contains("expand") || t.contains("elaborate") -> "🔍"
+        t.contains("brainstorm") || t.contains("angles") -> "💡"
+        t.contains("pros") || t.contains("risks") -> "⚖️"
+        t.contains("bug") || t.contains("jira") -> "💻"
+        t.contains("polish") -> "✨"
         t.contains("grammar") -> "✍️"
-        t.contains("executive") -> "💼"
+        t.contains("professional") || t.contains("executive") -> "💼"
         t.contains("punchy") -> "✂️"
         t.contains("bullet") -> "📌"
         t.contains("email") -> "📧"
         t.contains("tl;dr") || t.contains("short") -> "⚡"
         t.contains("roast") -> "💀"
+        t.contains("sarcastic") -> "🙄"
         t.contains("gen-z") || t.contains("slang") -> "🔥"
-        t.contains("gigachad") -> "🗿"
-        t.contains("dramatic") -> "🎭"
+        t.contains("gigachad") || t.contains("stoic") || t.contains("zen") -> "🗿"
+        t.contains("shakespeare") || t.contains("dramatic") -> "🎭"
         t.contains("5") || t.contains("eli5") -> "👶"
         t.contains("pirate") -> "🏴‍☠️"
-        t.contains("polite") || t.contains("soft") -> "🤝"
+        t.contains("diplomatic") || t.contains("polite") || t.contains("soft") -> "🤝"
         t.contains("academic") -> "🧐"
         t.contains("cyberpunk") -> "🥷"
         t.contains("poetic") -> "📜"
         t.contains("chill") || t.contains("casual") -> "😎"
+        t.contains("charming") -> "💫"
+        t.contains("hype") -> "🎉"
+        t.contains("english") -> "🇬🇧"
         t.contains("spanish") -> "🇪🇸"
         t.contains("french") -> "🇫🇷"
         t.contains("german") -> "🇩🇪"
@@ -367,23 +411,36 @@ private fun getPromptEmoji(title: String): String {
 private fun getPromptSubtitle(prompt: UserPromptEntity): String {
     val t = prompt.title.lowercase()
     return when {
-        t.contains("grammar") -> "Polish grammar & rhythm"
-        t.contains("executive") -> "C-suite business tone"
+        t.contains("confirm") || t.contains("accept") -> "Warm email confirmation"
+        t.contains("decline") -> "Diplomatic refusal email"
+        t.contains("cold") || t.contains("outreach") -> "High-converting pitch"
+        t.contains("follow-up") || t.contains("nudge") -> "Courteous thread check-in"
+        t.contains("recap") || t.contains("meeting") -> "Summary + action items"
+        t.contains("subject") -> "3 click-worthy subjects"
+        t.contains("expand") || t.contains("elaborate") -> "Notes to full paragraph"
+        t.contains("brainstorm") || t.contains("angles") -> "5 creative approaches"
+        t.contains("pros") || t.contains("risks") -> "Balanced risk analysis"
+        t.contains("bug") || t.contains("jira") -> "Structured ticket spec"
+        t.contains("polish") -> "Elevate flow & clarity"
+        t.contains("grammar") -> "Fix spelling & syntax"
+        t.contains("professional") || t.contains("executive") -> "C-suite business tone"
         t.contains("punchy") -> "Tight, zero filler"
         t.contains("bullet") -> "Extract concrete to-dos"
         t.contains("email") -> "Courteous context reply"
-        t.contains("tl;dr") || t.contains("short") -> "Under 10 words"
+        t.contains("tl;dr") || t.contains("short") -> "1-2 sentence summary"
         t.contains("roast") -> "Savage witty punchlines"
-        t.contains("gen-z") || t.contains("slang") -> "Brainrot slang (no cap, fr)"
-        t.contains("gigachad") -> "Hyper-confident stoic"
-        t.contains("dramatic") -> "Victorian tragedy style"
-        t.contains("5") || t.contains("eli5") -> "Playful 5yo analogies"
+        t.contains("sarcastic") -> "Dry deadpan irony"
+        t.contains("gen-z") || t.contains("slang") -> "Internet slang (no cap, fr)"
+        t.contains("stoic") || t.contains("zen") -> "Calm grounded perspective"
+        t.contains("shakespeare") || t.contains("dramatic") -> "Elizabethan theatrics"
+        t.contains("5") || t.contains("eli5") -> "Simple everyday words"
         t.contains("pirate") -> "Swashbuckling dialect"
-        t.contains("polite") || t.contains("soft") -> "Gentle & considerate"
-        t.contains("academic") -> "Elevate formal discourse"
-        t.contains("cyberpunk") -> "Terminal net vernacular"
-        t.contains("poetic") -> "Transform into rhyme"
+        t.contains("diplomatic") || t.contains("polite") -> "Conflict-diffusing tone"
+        t.contains("cyberpunk") -> "Netrunner comms style"
         t.contains("chill") || t.contains("casual") -> "Relaxed texting vibe"
+        t.contains("charming") -> "Warm charisma & wit"
+        t.contains("hype") -> "High-energy motivation"
+        t.contains("english") -> "Translate to English"
         t.contains("spanish") -> "Translate to Spanish"
         t.contains("french") -> "Translate to French"
         t.contains("german") -> "Translate to German"

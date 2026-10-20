@@ -8,9 +8,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
+import com.supakeyboard.neuralkey.ime.mvi.OneHandedMode
+import com.supakeyboard.neuralkey.ime.theme.KeyboardThemes
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -126,5 +129,54 @@ class KeyboardLayoutTest {
         }
         compose.onNodeWithText("hello").assertDoesNotExist()
         compose.onNodeWithText("Choose AI model").assertIsDisplayed()
+    }
+
+    @Test fun oneHandedModeCompactsKeysAndSupportsSwitchingSides() {
+        val state = mutableStateOf(KeyboardUiState(oneHandedMode = OneHandedMode.RIGHT))
+        val intents = mutableListOf<KeyboardIntent>()
+        compose.setContent {
+            MaterialTheme { KeyboardRootView(state.value, intents::add, Modifier.testTag("root")) }
+        }
+        val root = compose.onNodeWithTag("root").getUnclippedBoundsInRoot()
+        val qBounds = compose.onNodeWithContentDescription("q").getUnclippedBoundsInRoot()
+        // In Right-handed mode, 'q' is shifted right past the 18% left dock sidebar
+        assertTrue(qBounds.left > root.left + 40.dp)
+        compose.onNodeWithContentDescription("Switch one-handed side").assertIsDisplayed().performClick()
+        assertTrue(KeyboardIntent.SetOneHandedMode(OneHandedMode.LEFT) in intents)
+        compose.onNodeWithContentDescription("Exit one-handed mode").assertIsDisplayed().performClick()
+        assertTrue(KeyboardIntent.SetOneHandedMode(OneHandedMode.OFF) in intents)
+    }
+
+    @Test @Config(qualifiers = "w673dp-h841dp-port")
+    fun foldableUnfoldedDisplayRendersSplitThumbLayoutWithDualSpacebars() {
+        val intents = mutableListOf<KeyboardIntent>()
+        compose.setContent {
+            MaterialTheme {
+                KeyboardRootView(KeyboardUiState(splitKeyboardOnFold = true), intents::add)
+            }
+        }
+        compose.onNodeWithContentDescription("Toggle split keyboard").assertIsDisplayed().performClick()
+        assertTrue(KeyboardIntent.ToggleSplitLayout in intents)
+        // Split layout renders two thumb spacebars and creates an ergonomic gap between 't' and 'y'
+        assertEquals(2, compose.onAllNodesWithContentDescription("Space").fetchSemanticsNodes().size)
+        val tBounds = compose.onNodeWithContentDescription("t").getUnclippedBoundsInRoot()
+        val yBounds = compose.onNodeWithContentDescription("y").getUnclippedBoundsInRoot()
+        assertTrue(yBounds.left - tBounds.right > 30.dp)
+    }
+
+    @Test @Config(qualifiers = "w360dp-h400dp-port")
+    fun flipCoverScreenUsesCompactHeightPosture() {
+        compose.setContent {
+            MaterialTheme { KeyboardRootView(KeyboardUiState(), {}, Modifier.testTag("root")) }
+        }
+        val root = compose.onNodeWithTag("root").getUnclippedBoundsInRoot()
+        assertTrue(root.bottom - root.top < 240.dp)
+    }
+
+    @Test fun themesAndEmailPromptsAreAvailable() {
+        assertEquals(15, KeyboardThemes.allThemes.size)
+        val prompts = UserPromptEntity.defaultPrompts()
+        assertEquals(32, prompts.size)
+        assertTrue(prompts.any { it.category == "Email & Drafts" && it.title.contains("Cold Outreach") })
     }
 }
