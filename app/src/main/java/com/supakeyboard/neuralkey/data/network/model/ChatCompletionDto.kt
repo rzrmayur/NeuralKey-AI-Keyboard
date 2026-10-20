@@ -73,6 +73,28 @@ data class InputAudioPayloadDto(
     val format: String = "wav"
 )
 
+/**
+ * Request & response DTOs for OpenRouter's dedicated Speech-to-Text endpoint
+ * (`POST https://openrouter.ai/api/v1/audio/transcriptions`), supporting
+ * ElevenLabs Scribe v2 (`elevenlabs/scribe-v2`), Mistral Voxtral (`mistralai/voxtral-mini-transcribe`),
+ * and OpenAI Whisper (`openai/whisper-large-v3-turbo`).
+ */
+@Serializable
+data class AudioTranscriptionRequest(
+    @SerialName("model")
+    val model: String,
+    @SerialName("input_audio")
+    val inputAudio: InputAudioPayloadDto
+)
+
+@Serializable
+data class AudioTranscriptionResponseDto(
+    @SerialName("text")
+    val text: String? = null,
+    @SerialName("error")
+    val error: OpenRouterErrorDetailDto? = null
+)
+
 @Serializable
 data class ProviderRoutingDto(
     @SerialName("sort")

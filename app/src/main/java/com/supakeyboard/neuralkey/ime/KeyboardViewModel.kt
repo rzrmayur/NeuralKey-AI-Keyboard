@@ -9,12 +9,14 @@ import androidx.lifecycle.viewModelScope
 import com.supakeyboard.neuralkey.NeuralKeyApplication
 import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
 import com.supakeyboard.neuralkey.ime.clipboard.ClipboardHistoryManager
+import com.supakeyboard.neuralkey.ime.media.MediaTabCategory
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
 import com.supakeyboard.neuralkey.ime.mvi.OneHandedMode
 import com.supakeyboard.neuralkey.ime.mvi.VoiceTransformMode
 import com.supakeyboard.neuralkey.ime.persona.AppPersonaEngine
 import com.supakeyboard.neuralkey.ime.theme.KeyboardThemes
+import com.supakeyboard.neuralkey.ime.voice.VoiceAudioEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -109,7 +111,17 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
             }
             viewModelScope.launch {
                 repo.allModels.collect { all ->
-                    _uiState.update { it.copy(availableModels = all) }
+                    _uiState.update {
+                        it.copy(
+                            availableModels = all,
+                            availableVoiceModels = VoiceAudioEngine.buildAvailableVoiceModels(all)
+                        )
+                    }
+                }
+            }
+            viewModelScope.launch {
+                prefs.selectedVoiceModelId.collect { voiceModelId ->
+                    _uiState.update { it.copy(selectedVoiceModelId = voiceModelId) }
                 }
             }
             viewModelScope.launch {
@@ -441,7 +453,7 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    // ── Whisper / Multimodal Voice-to-Action ────────────────────────
+    // ── Whisper / Scribe v2 / Multimodal Voice-to-Action ────────────
 
     fun openVoiceAction() {
         _uiState.update {
@@ -453,24 +465,38 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(mode = KeyboardMode.TypingMode()) }
     }
 
+    fun selectVoiceModel(modelId: String) {
+        _uiState.update { it.copy(selectedVoiceModelId = modelId) }
+        val prefs = preferences ?: return
+        viewModelScope.launch {
+            prefs.setSelectedVoiceModelId(modelId)
+        }
+    }
+
     fun processVoiceTranscript(transcript: String, transformMode: VoiceTransformMode) {
-        if (transcript.isBlank()) return
+        val cleaned = VoiceAudioEngine.cleanRepetitiveSpeech(transcript)
+        if (cleaned.isBlank()) return
         startAIStreaming(
-            promptInstruction = transformMode.instruction,
-            draftText = transcript.trim()
+            promptInstruction = transformMode.instruction.ifBlank {
+                "Polish punctuation and capitalization while preserving exact wording."
+            },
+            draftText = cleaned
         )
     }
 
     fun processVoiceAudioWav(base64Wav: String, transformMode: VoiceTransformMode) {
         val repo = repository ?: return
-        val modelName = _uiState.value.activeModel?.name ?: "Gemini Audio AI"
+        val selectedVoiceId = _uiState.value.selectedVoiceModelId
+        val voiceModelName = _uiState.value.availableVoiceModels
+            .firstOrNull { it.id == selectedVoiceId }?.name
+            ?: selectedVoiceId.substringAfterLast('/')
         _uiState.update {
             it.copy(
                 mode = KeyboardMode.AIStreamingMode(
                     originalText = "[Voice Recording]",
                     streamedText = "",
                     isStreaming = true,
-                    modelUsed = modelName
+                    modelUsed = voiceModelName
                 )
             )
         }
@@ -479,10 +505,9 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
             try {
                 repo.streamVoiceAudioAction(
                     base64AudioWav = base64Wav,
-                    voiceInstruction = transformMode.instruction.ifBlank {
-                        "Transcribe this audio accurately with clean punctuation."
-                    },
-                    targetPackageName = _uiState.value.targetPackageName
+                    voiceInstruction = transformMode.instruction,
+                    targetPackageName = _uiState.value.targetPackageName,
+                    preferredVoiceModelId = selectedVoiceId
                 ).collect { token ->
                     _uiState.update { state ->
                         val currentStream = state.mode as? KeyboardMode.AIStreamingMode
@@ -513,6 +538,26 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                 }
             }
         }
+    }
+
+    // ── Internet-Wide GIF & Sticker Studio ──────────────────────────
+
+    fun openGifStickerSearch(
+        initialQuery: String = "",
+        category: MediaTabCategory = MediaTabCategory.GIFS
+    ) {
+        _uiState.update {
+            it.copy(
+                mode = KeyboardMode.GifStickerMode(
+                    initialQuery = initialQuery,
+                    initialCategory = category
+                )
+            )
+        }
+    }
+
+    fun closeGifStickerSearch() {
+        _uiState.update { it.copy(mode = KeyboardMode.TypingMode()) }
     }
 
     fun commitAIResult() {

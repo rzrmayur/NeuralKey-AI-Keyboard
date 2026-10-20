@@ -72,6 +72,16 @@ class KeyboardPreferences(private val context: Context) {
     suspend fun setSplitKeyboardOnFold(enabled: Boolean) { dataStore.edit { it[KEY_SPLIT_ON_FOLD] = enabled } }
     suspend fun setOneHandedMode(mode: OneHandedMode) { dataStore.edit { it[KEY_ONE_HANDED_MODE] = mode.name } }
 
+    val selectedVoiceModelId: Flow<String> = dataStore.data.map { preferences ->
+        preferences[KEY_VOICE_MODEL_ID] ?: DEFAULT_VOICE_MODEL_ID
+    }
+
+    suspend fun setSelectedVoiceModelId(modelId: String) {
+        dataStore.edit { preferences ->
+            preferences[KEY_VOICE_MODEL_ID] = modelId
+        }
+    }
+
     val selectedTheme: Flow<String> = dataStore.data.map { preferences ->
         preferences[KEY_THEME] ?: "SYSTEM_DYNAMIC"
     }
@@ -156,6 +166,8 @@ class KeyboardPreferences(private val context: Context) {
         private val KEY_ONE_HANDED_MODE = stringPreferencesKey("one_handed_mode")
 
         const val DEFAULT_ACTIVE_MODEL = "google/gemini-2.5-flash"
+        const val DEFAULT_VOICE_MODEL_ID = "elevenlabs/scribe-v2"
+        private val KEY_VOICE_MODEL_ID = stringPreferencesKey("selected_voice_model_id")
         val DEFAULT_PINNED_MODELS = setOf(
             "google/gemini-2.5-flash",
             "meta-llama/llama-3.3-70b-instruct",

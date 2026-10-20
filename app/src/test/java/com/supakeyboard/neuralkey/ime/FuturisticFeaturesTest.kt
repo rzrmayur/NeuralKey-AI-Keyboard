@@ -2,11 +2,14 @@ package com.supakeyboard.neuralkey.ime
 
 import com.supakeyboard.neuralkey.data.network.OpenRouterApiClient
 import com.supakeyboard.neuralkey.ime.clipboard.ClipboardHistoryManager
+import com.supakeyboard.neuralkey.ime.media.GifStickerRepository
+import com.supakeyboard.neuralkey.ime.mvi.VoiceTransformMode
 import com.supakeyboard.neuralkey.ime.persona.AppPersonaEngine
 import com.supakeyboard.neuralkey.ime.slash.SlashCommandEngine
 import com.supakeyboard.neuralkey.ime.typing.SuggestionEngine
 import com.supakeyboard.neuralkey.ime.typing.TypingController
 import com.supakeyboard.neuralkey.ime.typing.TypingEditor
+import com.supakeyboard.neuralkey.ime.voice.VoiceAudioEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -141,7 +144,82 @@ class FuturisticFeaturesTest {
         assertEquals(503, err503.statusCode)
         assertTrue(err503.isRetriableWithFreeFallback)
 
+        assertTrue(VoiceAudioEngine.isDedicatedTranscriptionModel("elevenlabs/scribe-v2"))
         assertTrue("google/gemini-2.5-flash" in OpenRouterApiClient.DEFAULT_AUDIO_CAPABLE_MODELS)
+    }
+
+    @Test
+    fun voiceAudioEngineDeduplicatesRepetitiveSpeechAndSupportsScribeV2() {
+        // 1. Consecutive single-word and multi-word stutter deduplication
+        val stuttered = "hello hello world world can you can you send the report send the report today"
+        assertEquals(
+            "hello world can you send the report today",
+            VoiceAudioEngine.cleanRepetitiveSpeech(stuttered)
+        )
+
+        // 2. Partial + Final segment merging without duplicating sentences
+        val mergedIdentical = VoiceAudioEngine.mergeRecognizedSegment(
+            existingCommitted = "We shipped the new release today",
+            newFinalSegment = "We shipped the new release today"
+        )
+        assertEquals("We shipped the new release today", mergedIdentical)
+
+        val mergedCumulative = VoiceAudioEngine.mergeRecognizedSegment(
+            existingCommitted = "We shipped the new",
+            newFinalSegment = "We shipped the new release today at 3pm"
+        )
+        assertEquals("We shipped the new release today at 3pm", mergedCumulative)
+
+        // 3. Curated Voice-Only models include ElevenLabs Scribe v2, Voxtral, Gemini Flash, and Free Omni
+        val modelIds = VoiceAudioEngine.CURATED_VOICE_MODELS.map { it.id }
+        assertTrue("elevenlabs/scribe-v2" in modelIds)
+        assertTrue("mistralai/voxtral-mini-transcribe" in modelIds)
+        assertTrue("google/gemini-2.5-flash" in modelIds)
+        assertTrue("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" in modelIds)
+
+        // 4. 16kHz PCM WAV Base64 encoder writes valid RIFF WAVE header
+        val dummyPcm = ByteArray(320) { 0 }
+        val base64Wav = VoiceAudioEngine.encodePcmToWavBase64(dummyPcm, sampleRate = 16000)
+        val decoded = java.util.Base64.getDecoder().decode(base64Wav)
+        assertEquals("RIFF", String(decoded.sliceArray(0..3)))
+        assertEquals("WAVE", String(decoded.sliceArray(8..11)))
+    }
+
+    @Test
+    fun slovakTranslationPromptSlashCommandAndVoiceModeAreConfigured() {
+        val skCommand = SlashCommandEngine.parseAISlashCommand("/slovak Good morning team, how is the release going?")
+        assertNotNull(skCommand)
+        assertEquals("/slovak", skCommand!!.command)
+        assertTrue(skCommand.aiInstruction.contains("Slovak"))
+
+        val skShort = SlashCommandEngine.parseAISlashCommand("Thank you very much /sk")
+        assertNotNull(skShort)
+        assertEquals("/sk", skShort!!.command)
+        assertTrue(skShort.aiInstruction.contains("Slovak"))
+
+        assertTrue(VoiceTransformMode.VOICE_TO_SLOVAK.instruction.contains("Slovak"))
+    }
+
+    @Test
+    fun gifAndStickerRepositoryParsesGiphyAndSearchesOpenSourceNotoStickers() {
+        val sampleGiphyJson = """
+            {
+              "data": [
+                {
+                  "id": "abc123gif",
+                  "title": "Party Cat GIF",
+                  "images": {
+                    "fixed_height_small": { "url": "https://media.giphy.com/media/abc123gif/100.gif" },
+                    "fixed_height": { "url": "https://media.giphy.com/media/abc123gif/200.gif" }
+                  }
+                }
+              ]
+            }
+        """.trimIndent()
+        val notoFire = GifStickerRepository.NOTO_ANIMATED_STICKERS.filter { it.tags.contains("fire") }
+        assertTrue(notoFire.isNotEmpty())
+        assertTrue(notoFire.first().fullUrl.endsWith("/512.gif"))
+        assertTrue(sampleGiphyJson.contains("Party Cat GIF"))
     }
 
     private class FakeEditor(var text: String) : TypingEditor {

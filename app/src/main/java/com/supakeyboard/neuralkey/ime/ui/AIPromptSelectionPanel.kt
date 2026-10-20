@@ -225,6 +225,12 @@ fun AIPromptSelectionPanel(
                 theme = theme,
                 onClick = { onIntent(KeyboardIntent.OpenVoiceAction) }
             )
+            FuturisticPowerPill(
+                label = "🎬 GIF & Stickers",
+                accentColor = Color(0xFFA855F7),
+                theme = theme,
+                onClick = { onIntent(KeyboardIntent.OpenGifStickerSearch()) }
+            )
         }
 
         // 3. Category Filter Tabs
@@ -448,6 +454,7 @@ private fun getPromptEmoji(title: String): String {
         t.contains("spanish") -> "🇪🇸"
         t.contains("french") -> "🇫🇷"
         t.contains("german") -> "🇩🇪"
+        t.contains("slovak") || t.contains("sloven") -> "🇸🇰"
         t.contains("japanese") -> "🇯🇵"
         else -> "✨"
     }
@@ -489,6 +496,7 @@ private fun getPromptSubtitle(prompt: UserPromptEntity): String {
         t.contains("spanish") -> "Translate to Spanish"
         t.contains("french") -> "Translate to French"
         t.contains("german") -> "Translate to German"
+        t.contains("slovak") || t.contains("sloven") -> "Translate to Slovak (Slovenčina)"
         t.contains("japanese") -> "Translate to Japanese"
         else -> prompt.category
     }

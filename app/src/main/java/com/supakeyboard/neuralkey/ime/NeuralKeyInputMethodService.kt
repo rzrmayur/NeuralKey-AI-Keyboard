@@ -20,6 +20,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.supakeyboard.neuralkey.NeuralKeyApplication
 import com.supakeyboard.neuralkey.ime.lifecycle.LifecycleInputMethodService
+import com.supakeyboard.neuralkey.ime.media.GifStickerRepository
+import com.supakeyboard.neuralkey.ime.media.MediaCommitResult
+import com.supakeyboard.neuralkey.ime.media.MediaTabCategory
 import com.supakeyboard.neuralkey.ime.mvi.AICommitAction
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
@@ -207,7 +210,8 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
                 intent is KeyboardIntent.TriggerGhostCompletion ||
                 intent is KeyboardIntent.OpenClipboardFusion ||
                 intent is KeyboardIntent.OpenModelArena ||
-                intent is KeyboardIntent.OpenVoiceAction
+                intent is KeyboardIntent.OpenVoiceAction ||
+                intent is KeyboardIntent.OpenGifStickerSearch
             )
         if (sensitiveBlocked) return
 
@@ -270,7 +274,24 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
                         val editor = ConnectionEditor(ic)
                         val before = editor.beforeCursor(512)
                         val latestClip = (application as? NeuralKeyApplication)?.clipboardHistoryManager?.latestClipText()
-                        // 1. Offline macro evaluation on Enter (e.g. /calc (150 * 4) / 2)
+                        // 1. Check /gif or /sticker slash command on Enter
+                        val trimmedBefore = before.trim()
+                        if (trimmedBefore.startsWith("/gif", ignoreCase = true) ||
+                            trimmedBefore.startsWith("/sticker", ignoreCase = true)
+                        ) {
+                            val isSticker = trimmedBefore.startsWith("/sticker", ignoreCase = true)
+                            val query = trimmedBefore.substringAfter(" ", "").trim()
+                            editor.batch {
+                                editor.deleteBefore(before.length)
+                            }
+                            updateDraftAfterEdit()
+                            viewModel.openGifStickerSearch(
+                                initialQuery = query,
+                                category = if (isSticker) MediaTabCategory.STICKERS else MediaTabCategory.GIFS
+                            )
+                            return
+                        }
+                        // 2. Offline macro evaluation on Enter (e.g. /calc (150 * 4) / 2)
                         val expandedMacro = SlashCommandEngine.evaluateOfflineMacro(before, latestClip)
                         if (expandedMacro != null && expandedMacro != before) {
                             editor.batch {
@@ -376,18 +397,53 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             }
             is KeyboardIntent.OpenVoiceAction -> viewModel.openVoiceAction()
             is KeyboardIntent.CloseVoiceAction -> viewModel.closeVoiceAction()
+            is KeyboardIntent.SelectVoiceModel -> viewModel.selectVoiceModel(intent.modelId)
             is KeyboardIntent.ProcessVoiceTranscript -> {
+                val cleaned = com.supakeyboard.neuralkey.ime.voice.VoiceAudioEngine.cleanRepetitiveSpeech(intent.transcript)
                 if (intent.transformMode == VoiceTransformMode.RAW_DICTATION) {
                     typing.reset()
-                    currentInputConnection?.commitText(intent.transcript.trim() + " ", 1)
+                    if (cleaned.isNotBlank()) {
+                        currentInputConnection?.commitText("$cleaned ", 1)
+                    }
                     viewModel.closeVoiceAction()
                     updateDraftAfterEdit()
                 } else {
-                    viewModel.processVoiceTranscript(intent.transcript, intent.transformMode)
+                    viewModel.processVoiceTranscript(cleaned, intent.transformMode)
                 }
             }
             is KeyboardIntent.ProcessVoiceAudioWav -> {
                 viewModel.processVoiceAudioWav(intent.base64Wav, intent.transformMode)
+            }
+            is KeyboardIntent.OpenGifStickerSearch -> {
+                val initialQuery = intent.initialQuery.ifBlank {
+                    extractCurrentDraft().trim().takeIf { it.length in 1..32 && !it.contains('\n') }.orEmpty()
+                }
+                viewModel.openGifStickerSearch(initialQuery, intent.initialCategory)
+            }
+            is KeyboardIntent.CloseGifStickerSearch -> viewModel.closeGifStickerSearch()
+            is KeyboardIntent.CommitGifSticker -> {
+                val ic = currentInputConnection
+                val editorInfo = currentInputEditorInfo
+                viewModel.closeGifStickerSearch()
+                if (ic != null) {
+                    lifecycleScope.launch {
+                        val commitResult = GifStickerRepository.getInstance(this@NeuralKeyInputMethodService)
+                            .commitMediaToEditor(
+                                item = intent.item,
+                                inputConnection = ic,
+                                editorInfo = editorInfo
+                            )
+                        if (commitResult != MediaCommitResult.FAILED) {
+                            updateDraftAfterEdit()
+                        } else {
+                            android.widget.Toast.makeText(
+                                this@NeuralKeyInputMethodService,
+                                "Couldn't insert media into this field",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
             }
             is KeyboardIntent.HideKeyboard -> requestHideSelf(0)
             is KeyboardIntent.MoveCursor -> {

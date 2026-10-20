@@ -223,21 +223,103 @@ class OpenRouterRepository(
     }.flowOn(Dispatchers.IO)
 
     /**
+     * Transcribes recorded 16kHz WAV audio into clean, non-repetitive text using OpenRouter's
+     * voice/STT models (`elevenlabs/scribe-v2`, `mistralai/voxtral-mini-transcribe`, `openai/whisper-large-v3-turbo`,
+     * or multimodal Audio LLMs like `google/gemini-2.5-flash`, `mistralai/voxtral-small-24b-2507`, and `:free` audio models).
+     */
+    suspend fun transcribeVoiceAudioToText(
+        base64AudioWav: String,
+        preferredVoiceModelId: String? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val apiKey = secureKeyStorage.getApiKey()?.takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("OpenRouter API key is missing. Paste your free key in Settings → Setup.")
+            val chosenModelId = preferredVoiceModelId ?: preferences.selectedVoiceModelId.first()
+
+            val rawTranscript = if (com.supakeyboard.neuralkey.ime.voice.VoiceAudioEngine.isDedicatedTranscriptionModel(chosenModelId)) {
+                val sttResult = apiClient.transcribeAudio(base64AudioWav, chosenModelId, apiKey)
+                if (sttResult.isSuccess) {
+                    sttResult.getOrThrow()
+                } else {
+                    // Fallback to multimodal audio completion across audio-capable models (including free audio models)
+                    collectMultimodalTranscription(base64AudioWav, apiKey, OpenRouterApiClient.DEFAULT_AUDIO_CAPABLE_MODELS)
+                }
+            } else {
+                val candidateModels = (listOf(chosenModelId) + OpenRouterApiClient.DEFAULT_AUDIO_CAPABLE_MODELS).distinct()
+                try {
+                    collectMultimodalTranscription(base64AudioWav, apiKey, candidateModels.take(3))
+                } catch (e: OpenRouterApiException) {
+                    if (e.isRetriableWithFreeFallback) {
+                        collectMultimodalTranscription(base64AudioWav, apiKey, OpenRouterApiClient.FREE_AUDIO_FALLBACK_MODELS)
+                    } else {
+                        throw e
+                    }
+                }
+            }
+
+            val cleaned = com.supakeyboard.neuralkey.ime.voice.VoiceAudioEngine.cleanRepetitiveSpeech(rawTranscript)
+            if (cleaned.isEmpty()) {
+                throw IllegalStateException("No speech detected in recording. Please speak clearly and try again.")
+            }
+            cleaned
+        }
+    }
+
+    private suspend fun collectMultimodalTranscription(
+        base64AudioWav: String,
+        apiKey: String,
+        models: List<String>
+    ): String {
+        val sb = StringBuilder()
+        apiClient.streamMultimodalAudioCompletion(
+            base64AudioWav = base64AudioWav,
+            systemInstruction = "You are a precision speech-to-text transcription engine. Transcribe the user's spoken audio accurately without repeating words or adding commentary. Output ONLY the transcribed words.",
+            userPrompt = "Transcribe this audio recording verbatim and cleanly.",
+            apiKey = apiKey,
+            models = models
+        ).collect { token ->
+            sb.append(token)
+        }
+        return sb.toString().trim()
+    }
+
+    /**
      * Streams multimodal voice audio directly to OpenRouter audio-capable models
-     * (e.g. google/gemini-2.5-flash, google/gemini-2.0-flash-001).
+     * (`elevenlabs/scribe-v2`, `mistralai/voxtral-mini-transcribe`, `mistralai/voxtral-small-24b-2507`,
+     * `google/gemini-2.5-flash`, `openai/gpt-audio-mini`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`, etc.).
      */
     fun streamVoiceAudioAction(
         base64AudioWav: String,
         voiceInstruction: String,
-        targetPackageName: String? = null
+        targetPackageName: String? = null,
+        preferredVoiceModelId: String? = null
     ): Flow<String> = flow {
         try {
             val apiKey = secureKeyStorage.getApiKey()?.takeIf { it.isNotBlank() }
                 ?: throw IllegalStateException("OpenRouter API key is missing. Open NeuralKey Settings → Setup to paste your free key.")
 
-            val activeModelId = preferences.activeModelId.first()
+            val chosenModelId = preferredVoiceModelId ?: preferences.selectedVoiceModelId.first()
+
+            if (com.supakeyboard.neuralkey.ime.voice.VoiceAudioEngine.isDedicatedTranscriptionModel(chosenModelId) ||
+                voiceInstruction.isBlank()
+            ) {
+                val transcript = transcribeVoiceAudioToText(base64AudioWav, chosenModelId).getOrThrow()
+                if (voiceInstruction.isBlank()) {
+                    emit(transcript)
+                } else {
+                    streamAIAction(
+                        promptInstruction = voiceInstruction,
+                        draftText = transcript,
+                        targetPackageName = targetPackageName
+                    ).collect { token ->
+                        emit(token)
+                    }
+                }
+                return@flow
+            }
+
             val audioModels = buildList {
-                if (isAudioCapableModel(activeModelId)) add(activeModelId)
+                if (isAudioCapableModel(chosenModelId)) add(chosenModelId)
                 addAll(OpenRouterApiClient.DEFAULT_AUDIO_CAPABLE_MODELS)
             }.distinct().take(3)
 
@@ -246,14 +328,32 @@ class OpenRouterRepository(
                 targetPackageName = targetPackageName
             )
 
-            apiClient.streamMultimodalAudioCompletion(
-                base64AudioWav = base64AudioWav,
-                systemInstruction = systemPrompt,
-                userPrompt = voiceInstruction,
-                apiKey = apiKey,
-                models = audioModels
-            ).collect { token ->
-                emit(token)
+            var emittedAny = false
+            try {
+                apiClient.streamMultimodalAudioCompletion(
+                    base64AudioWav = base64AudioWav,
+                    systemInstruction = systemPrompt,
+                    userPrompt = "$voiceInstruction Do NOT repeat words or stutter.",
+                    apiKey = apiKey,
+                    models = audioModels
+                ).collect { token ->
+                    emittedAny = true
+                    emit(token)
+                }
+            } catch (e: OpenRouterApiException) {
+                if (!emittedAny && e.isRetriableWithFreeFallback) {
+                    apiClient.streamMultimodalAudioCompletion(
+                        base64AudioWav = base64AudioWav,
+                        systemInstruction = systemPrompt,
+                        userPrompt = "$voiceInstruction Do NOT repeat words or stutter.",
+                        apiKey = apiKey,
+                        models = OpenRouterApiClient.FREE_AUDIO_FALLBACK_MODELS
+                    ).collect { token ->
+                        emit(token)
+                    }
+                } else {
+                    throw e
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -265,11 +365,7 @@ class OpenRouterRepository(
     }.flowOn(Dispatchers.IO)
 
     fun isAudioCapableModel(modelId: String): Boolean {
-        val lower = modelId.lowercase()
-        return lower.contains("gemini-2.") ||
-            lower.contains("gemini-1.5") ||
-            lower.contains("gpt-4o-audio") ||
-            lower.contains("voxtral")
+        return com.supakeyboard.neuralkey.ime.voice.VoiceAudioEngine.isVoiceCapableModelId(modelId)
     }
 
     suspend fun setActiveModel(modelId: String) {

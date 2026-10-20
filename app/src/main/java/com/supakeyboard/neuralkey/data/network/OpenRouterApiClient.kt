@@ -1,6 +1,8 @@
 package com.supakeyboard.neuralkey.data.network
 
 import android.util.Log
+import com.supakeyboard.neuralkey.data.network.model.AudioTranscriptionRequest
+import com.supakeyboard.neuralkey.data.network.model.AudioTranscriptionResponseDto
 import com.supakeyboard.neuralkey.data.network.model.ChatCompletionChunkDto
 import com.supakeyboard.neuralkey.data.network.model.ChatCompletionRequest
 import com.supakeyboard.neuralkey.data.network.model.InputAudioPayloadDto
@@ -18,6 +20,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
 import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
@@ -229,6 +232,45 @@ class OpenRouterApiClient(
         }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * Calls OpenRouter's dedicated Speech-to-Text endpoint (`POST /api/v1/audio/transcriptions`)
+     * for models such as `elevenlabs/scribe-v2`, `mistralai/voxtral-mini-transcribe`, and `openai/whisper-large-v3-turbo`.
+     */
+    suspend fun transcribeAudio(
+        base64AudioWav: String,
+        modelId: String,
+        apiKey: String
+    ): Result<String> = runCatching {
+        require(apiKey.isNotBlank()) { "OpenRouter API Key is missing." }
+        require(base64AudioWav.isNotBlank()) { "Audio recording payload is empty." }
+
+        val request = AudioTranscriptionRequest(
+            model = modelId,
+            inputAudio = InputAudioPayloadDto(data = base64AudioWav, format = "wav")
+        )
+        val httpResponse = httpClient.post(AUDIO_TRANSCRIPTIONS_ENDPOINT) {
+            header(HttpHeaders.Authorization, "Bearer $apiKey")
+            header(HEADER_HTTP_REFERER, REFERER_VALUE)
+            header(HEADER_X_TITLE, TITLE_VALUE)
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }
+        val status = httpResponse.status.value
+        val rawBody = runCatching { httpResponse.bodyAsText() }.getOrDefault("")
+        if (status !in 200..299) {
+            throw parseApiError(status, rawBody)
+        }
+        val parsed = json.decodeFromString<AudioTranscriptionResponseDto>(rawBody)
+        if (parsed.error != null) {
+            throw parseApiError(parsed.error.code ?: 500, parsed.error.message ?: "Transcription error")
+        }
+        val text = parsed.text?.trim().orEmpty()
+        if (text.isEmpty()) {
+            throw IllegalStateException("No speech detected in audio.")
+        }
+        text
+    }
+
     internal fun parseApiError(statusCode: Int, rawBody: String): OpenRouterApiException {
         val parsedDetail = runCatching {
             json.decodeFromString<OpenRouterErrorResponseDto>(rawBody).error?.message
@@ -288,11 +330,23 @@ class OpenRouterApiClient(
         const val MODELS_ENDPOINT = "$BASE_URL/models"
         const val AUTH_KEY_ENDPOINT = "$BASE_URL/auth/key"
         const val CHAT_COMPLETIONS_ENDPOINT = "$BASE_URL/chat/completions"
+        const val AUDIO_TRANSCRIPTIONS_ENDPOINT = "$BASE_URL/audio/transcriptions"
 
         val DEFAULT_AUDIO_CAPABLE_MODELS = listOf(
             "google/gemini-2.5-flash",
-            "google/gemini-2.0-flash-001",
-            "google/gemini-2.0-flash-lite-001"
+            "mistralai/voxtral-small-24b-2507",
+            "google/gemini-2.5-flash-lite",
+            "openai/gpt-audio-mini",
+            "qwen/qwen3.8-omni-flash",
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            "thinkingmachines/inkling:free",
+            "thinkingmachines/inkling-small:free"
+        )
+
+        val FREE_AUDIO_FALLBACK_MODELS = listOf(
+            "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            "thinkingmachines/inkling:free",
+            "thinkingmachines/inkling-small:free"
         )
 
         private const val HEADER_HTTP_REFERER = "HTTP-Referer"

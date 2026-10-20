@@ -248,6 +248,19 @@ fun KeyboardRootView(
                     )
                 }
             }
+            is KeyboardMode.GifStickerMode -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(totalPanelHeight)
+                ) {
+                    GifStickerSearchPanel(
+                        gifMode = uiState.mode as KeyboardMode.GifStickerMode,
+                        theme = resolvedTheme,
+                        onIntent = onIntent
+                    )
+                }
+            }
         }
     }
 }

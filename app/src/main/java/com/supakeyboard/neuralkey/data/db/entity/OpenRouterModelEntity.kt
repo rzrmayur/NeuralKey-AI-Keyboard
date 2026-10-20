@@ -42,14 +42,30 @@ data class OpenRouterModelEntity(
             }
         }
 
+    val supportsAudioInput: Boolean
+        get() = modality.contains("audio", ignoreCase = true) ||
+            id.contains("scribe", ignoreCase = true) ||
+            id.contains("voxtral", ignoreCase = true) ||
+            id.contains("whisper", ignoreCase = true) ||
+            id.contains("gpt-audio", ignoreCase = true) ||
+            id.contains("omni", ignoreCase = true) ||
+            id.contains("inkling", ignoreCase = true)
+
     companion object {
         fun fromDto(dto: OpenRouterModelDto, isPinned: Boolean = false): OpenRouterModelEntity {
+            val rawModality = dto.architecture?.modality ?: "text->text"
+            val hasAudioInput = dto.architecture?.inputModalities?.any { it.equals("audio", ignoreCase = true) } == true
+            val resolvedModality = if (hasAudioInput && !rawModality.contains("audio", ignoreCase = true)) {
+                "audio+$rawModality"
+            } else {
+                rawModality
+            }
             return OpenRouterModelEntity(
                 id = dto.id,
                 name = dto.name,
                 description = dto.description ?: "",
                 contextLength = dto.contextLength ?: 0,
-                modality = dto.architecture?.modality ?: "text->text",
+                modality = resolvedModality,
                 promptPricePerToken = dto.pricing?.prompt ?: "0",
                 completionPricePerToken = dto.pricing?.completion ?: "0",
                 promptCostPerMillion = dto.promptCostPerMillion,

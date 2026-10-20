@@ -3,7 +3,7 @@
 # 🧠 NeuralKey AI Keyboard
 ### *100% Free, Open-Source, Zero-Telemetry Intelligent Android IME*
 
-**Built natively with 100% Jetpack Compose • Kotlin 2.1 • Neural Trail Glide Typing • Slash Commands & Offline Math Macros • Multi-Model Arena Split-Compare • Smart Clipboard AI Fusion • Voice-to-Action Studio • Adaptive On-Device Key Memory • Foldable & One-Handed Postures • 15 Flagship Themes**
+**Built natively with 100% Jetpack Compose • Kotlin 2.1 • Neural Trail Glide Typing • Internet GIF & Sticker Studio • Scribe v2 & Multimodal Voice-to-Action • Slash Commands & Offline Math Macros • Multi-Model Arena Split-Compare • Smart Clipboard AI Fusion • Adaptive On-Device Key Memory • Foldable & One-Handed Postures • 15 Flagship Themes**
 
 [![Release](https://img.shields.io/github/v/release/rzrmayur/NeuralKey-AI-Keyboard?style=for-the-badge&logo=android&logoColor=white&label=Latest%20APK&color=10B981)](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/releases/latest)
 [![CI Status](https://img.shields.io/github/actions/workflow/status/rzrmayur/NeuralKey-AI-Keyboard/android.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Android%20CI)](https://github.com/rzrmayur/NeuralKey-AI-Keyboard/actions)
@@ -77,9 +77,14 @@ See full release notes in [`docs/releases/v1.3.0.md`](docs/releases/v1.3.0.md), 
   - Streams **2 OpenRouter LLMs side-by-side in parallel** inside the keyboard, displaying live token generation, per-model latency (`ms`), and 1-tap **`✓ Use Model A` / `✓ Use Model B`** winner selection.
 - **💻 In-Keyboard Slash Commands & Dynamic Offline Macros (`SlashCommandEngine`):**
   - **Zero-Latency Offline Macros (on `Space` or `Enter`):** `/calc <math>` (safe recursive-descent math parser supporting `+ - * / % ^` and parentheses, e.g., `/calc (12+8)*3.5` $\rightarrow$ `70`), `/date`, `/time`, `/datetime`, `/clip`, `/shrug` (`¯\_(ツ)_/¯`), and `/tableflip`.
-  - **Instant AI Slash Commands:** Type `/email`, `/fix`, `/tldr`, `/polite`, `/sql`, `/regex`, `/code`, or `/translate` before or after your text and press `Space` or `Enter` to trigger instant AI streaming—with live slash-command autocomplete in the suggestion bar as soon as you type `/`.
-- **🎙️ Whisper / Multimodal Voice-to-Action Studio (`VoiceToActionPanel`):**
-  - Speak messy thoughts via Android `SpeechRecognizer` or OpenRouter `input_audio` WAV streaming (`google/gemini-2.5-flash`, `google/gemini-2.0-flash-001`, `google/gemini-2.0-flash-lite-001`) and transform them into **`✨ Smart Polish`**, **`✉️ Voice → Email`**, **`📋 Voice → Bullets`**, or **`🌐 Voice → English`**.
+  - **Instant AI & Media Slash Commands:** Type `/email`, `/fix`, `/tldr`, `/polite`, `/sql`, `/regex`, `/code`, `/translate`, `/slovak` (`/sk`), `/gif <query>`, or `/sticker <query>` and press `Space` or `Enter` to trigger instant AI streaming or open the GIF & Sticker Studio—with live slash-command autocomplete in the suggestion bar as soon as you type `/`.
+- **🎙️ Scribe v2 / Voxtral / Multimodal Voice-to-Action Studio (`VoiceToActionPanel` & `VoiceAudioEngine`):**
+  - **Configured Exclusively for Voice-Capable OpenRouter Models:** Choose directly between **ElevenLabs Scribe v2 (`elevenlabs/scribe-v2`)**, **Mistral Voxtral (`mistralai/voxtral-mini-transcribe` & `mistralai/voxtral-small-24b-2507`)**, **Google Gemini 2.5 Flash Audio (`google/gemini-2.5-flash`)**, **OpenAI GPT Audio Mini & Whisper Large v3 Turbo**, **Qwen 3.8 Omni Flash**, and **100% Free ($0.00) Audio Models (`nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`, `thinkingmachines/inkling:free`)**.
+  - **16kHz HD PCM WAV Recording + Zero Repetitive Words:** Hardware 16kHz mono PCM recorder (`WavAudioRecorder`) with `NoiseSuppressor` + `AutomaticGainControl` and multi-stage n-gram stutter/repeat deduplication (`VoiceAudioEngine.cleanRepetitiveSpeech` & `mergeRecognizedSegment`), transforming speech into **`✨ Smart Polish`**, **`✉️ Voice → Email`**, **`📋 Voice → Bullets`**, **`🌐 Voice → English`**, **`🇸🇰 Voice → Slovak`**, or **`✍️ Raw Text`**.
+- **🎬 Internet-Wide GIF & Sticker Search Studio (`GifStickerSearchPanel` & `GifStickerRepository`):**
+  - Search across the largest open/free collections on the internet right inside the keyboard (**🎬 GIPHY Global GIFs**, **✨ GIPHY Transparent Animated Stickers**, **🌐 Wikimedia Commons Open-Source GIFs**, and **😎 Google Open-Source Apache-2.0 Noto Animated Emoji Stickers**) with an inline mini-QWERTY search bar, 16 reaction chips, and direct animated GIF insertion via `InputConnectionCompat.commitContent`.
+- **🇸🇰 Slovak (`Slovenčina`) Translation & 33 Built-In AI Actions:**
+  - Added **`🇸🇰 Translate to Slovak`** (`Slovenčina`) across the AI Prompt Studio, `/slovak` & `/sk` slash commands, and `Voice → Slovak`.
 - **🛡️ Hardened OpenRouter Error Diagnostics & Automatic Free-Tier Recovery (`OpenRouterApiClient` & `OpenRouterRepository`):**
   - Detailed, actionable HTTP status diagnostics (`400`, `401/403`, `402`, `404`, `408`, `429`, `5xx`) + automatic fallback to `openrouter/free` if a primary model is rate-limited or out of credits.
 

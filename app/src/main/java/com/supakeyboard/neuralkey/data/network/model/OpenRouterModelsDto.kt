@@ -26,28 +26,18 @@ data class OpenRouterModelDto(
     @SerialName("top_provider")
     val topProvider: TopProviderDto? = null
 ) {
-    /**
-     * Cost per 1M prompt tokens in USD.
-     * OpenRouter gives pricing as price per single token in decimal string (e.g. "0.000001").
-     */
     val promptCostPerMillion: Double
         get() {
             val perToken = pricing?.prompt?.toDoubleOrNull() ?: 0.0
             return perToken * 1_000_000.0
         }
 
-    /**
-     * Cost per 1M completion tokens in USD.
-     */
     val completionCostPerMillion: Double
         get() {
             val perToken = pricing?.completion?.toDoubleOrNull() ?: 0.0
             return perToken * 1_000_000.0
         }
 
-    /**
-     * Model is considered free if prompt and completion costs are explicitly zero or pricing is zero.
-     */
     val isFree: Boolean
         get() {
             val promptZero = pricing?.prompt == null || pricing.prompt == "0" || (pricing.prompt.toDoubleOrNull() ?: 0.0) == 0.0
@@ -71,6 +61,8 @@ data class OpenRouterModelDto(
 data class ArchitectureDto(
     @SerialName("modality")
     val modality: String? = null,
+    @SerialName("input_modalities")
+    val inputModalities: List<String> = emptyList(),
     @SerialName("tokenizer")
     val tokenizer: String? = null,
     @SerialName("instruct_type")

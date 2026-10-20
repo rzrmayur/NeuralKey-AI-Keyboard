@@ -316,6 +316,15 @@ data class UserPromptEntity(
                 category = "Translation",
                 orderIndex = 31,
                 isBuiltIn = true
+            ),
+            UserPromptEntity(
+                id = 33,
+                title = "Translate to Slovak",
+                promptInstruction = "Translate the following text into natural, fluent, idiomatic Slovak (Slovenčina).",
+                iconKey = "language",
+                category = "Translation",
+                orderIndex = 32,
+                isBuiltIn = true
             )
         )
     }

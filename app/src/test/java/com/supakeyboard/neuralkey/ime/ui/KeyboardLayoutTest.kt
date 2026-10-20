@@ -57,6 +57,9 @@ class KeyboardLayoutTest {
             ),
             KeyboardMode.VoiceActionMode(
                 transcriptDraft = "Remind team about deployment at 4pm"
+            ),
+            KeyboardMode.GifStickerMode(
+                initialQuery = "party"
             )
         )) {
             compose.runOnIdle { state.value = state.value.copy(mode = mode) }
@@ -194,8 +197,9 @@ class KeyboardLayoutTest {
     @Test fun themesAndEmailPromptsAreAvailable() {
         assertEquals(15, KeyboardThemes.allThemes.size)
         val prompts = UserPromptEntity.defaultPrompts()
-        assertEquals(32, prompts.size)
+        assertEquals(33, prompts.size)
         assertTrue(prompts.any { it.category == "Email & Drafts" && it.title.contains("Cold Outreach") })
+        assertTrue(prompts.any { it.category == "Translation" && it.title == "Translate to Slovak" })
     }
 
     @Test fun futuristicPanelsDispatchExpectedIntents() {

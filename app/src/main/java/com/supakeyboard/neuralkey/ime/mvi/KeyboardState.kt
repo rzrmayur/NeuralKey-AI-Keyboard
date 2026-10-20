@@ -5,6 +5,10 @@ import androidx.compose.runtime.Stable
 import com.supakeyboard.neuralkey.data.db.entity.OpenRouterModelEntity
 import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
 import com.supakeyboard.neuralkey.ime.clipboard.ClipboardItem
+import com.supakeyboard.neuralkey.ime.media.GifStickerItem
+import com.supakeyboard.neuralkey.ime.media.MediaTabCategory
+import com.supakeyboard.neuralkey.ime.voice.VoiceAudioEngine
+import com.supakeyboard.neuralkey.ime.voice.VoiceModelOption
 
 @Immutable
 enum class OneHandedMode {
@@ -34,6 +38,11 @@ enum class VoiceTransformMode(val label: String, val emoji: String, val instruct
         label = "Voice → English",
         emoji = "🌐",
         instruction = "Translate and polish this spoken input into fluent, natural English."
+    ),
+    VOICE_TO_SLOVAK(
+        label = "Voice → Slovak",
+        emoji = "🇸🇰",
+        instruction = "Translate and polish this spoken input into fluent, natural, idiomatic Slovak (Slovenčina)."
     ),
     RAW_DICTATION(
         label = "Raw Text",
@@ -126,6 +135,15 @@ sealed interface KeyboardMode {
         val transcriptDraft: String = "",
         val statusMessage: String? = null
     ) : KeyboardMode
+
+    /**
+     * Federated Internet GIF & Sticker search studio panel.
+     */
+    @Immutable
+    data class GifStickerMode(
+        val initialQuery: String = "",
+        val initialCategory: MediaTabCategory = MediaTabCategory.GIFS
+    ) : KeyboardMode
 }
 
 @Immutable
@@ -183,8 +201,15 @@ sealed interface KeyboardIntent {
     data class CommitArenaWinner(val text: String, val winningModelId: String) : KeyboardIntent
     object OpenVoiceAction : KeyboardIntent
     object CloseVoiceAction : KeyboardIntent
+    data class SelectVoiceModel(val modelId: String) : KeyboardIntent
     data class ProcessVoiceTranscript(val transcript: String, val transformMode: VoiceTransformMode) : KeyboardIntent
     data class ProcessVoiceAudioWav(val base64Wav: String, val transformMode: VoiceTransformMode) : KeyboardIntent
+    data class OpenGifStickerSearch(
+        val initialQuery: String = "",
+        val initialCategory: MediaTabCategory = MediaTabCategory.GIFS
+    ) : KeyboardIntent
+    object CloseGifStickerSearch : KeyboardIntent
+    data class CommitGifSticker(val item: GifStickerItem) : KeyboardIntent
     data class UpdateTargetContext(val packageName: String?, val inputType: Int, val imeAction: Int) : KeyboardIntent
     data class DraftChanged(val draftText: String) : KeyboardIntent
 }
@@ -196,6 +221,8 @@ sealed interface KeyboardIntent {
 data class KeyboardUiState(
     val mode: KeyboardMode = KeyboardMode.TypingMode(),
     val activeModel: OpenRouterModelEntity? = null,
+    val selectedVoiceModelId: String = VoiceAudioEngine.DEFAULT_VOICE_MODEL_ID,
+    val availableVoiceModels: List<VoiceModelOption> = VoiceAudioEngine.CURATED_VOICE_MODELS,
     val pinnedModels: List<OpenRouterModelEntity> = emptyList(),
     val availableModels: List<OpenRouterModelEntity> = emptyList(),
     val userPrompts: List<UserPromptEntity> = emptyList(),

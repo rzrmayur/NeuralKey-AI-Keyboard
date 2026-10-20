@@ -30,6 +30,9 @@ object SlashCommandEngine {
         "/regex",
         "/code",
         "/translate",
+        "/slovak",
+        "/gif",
+        "/sticker",
         "/date",
         "/time",
         "/clip",
@@ -45,7 +48,9 @@ object SlashCommandEngine {
         "/sql" to "Write a clean, production-ready SQL query that accomplishes the described request. Output only the SQL query.",
         "/regex" to "Write an accurate regular expression for the described pattern. Output only the regex pattern.",
         "/code" to "Write a clean, idiomatic, production-ready code snippet for the described task. Output only the code.",
-        "/translate" to "Translate this text into fluent, natural English (or into the target language if specified in the text)."
+        "/translate" to "Translate this text into fluent, natural English (or into the target language if specified in the text).",
+        "/slovak" to "Translate this text into natural, fluent, idiomatic Slovak (Slovenčina).",
+        "/sk" to "Translate this text into natural, fluent, idiomatic Slovak (Slovenčina)."
     )
 
     /**

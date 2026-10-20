@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.GifBox
 import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhonelinkSetup
@@ -73,6 +74,17 @@ fun AICommandBar(
                     contentDescription = "Voice to Action",
                     tint = theme.keyFunctionalTextColor,
                     modifier = Modifier.size(17.dp)
+                )
+            }
+            IconButton(
+                onClick = { onIntent(KeyboardIntent.OpenGifStickerSearch()) },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.GifBox,
+                    contentDescription = "GIF & Sticker Search",
+                    tint = theme.keyFunctionalTextColor,
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }
