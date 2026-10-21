@@ -489,6 +489,7 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
                 viewModel.commitAIResult()
             }
             is KeyboardIntent.CancelAIStreaming -> viewModel.cancelAIStreaming()
+            is KeyboardIntent.RetryAIStreaming -> viewModel.retryAIStreaming()
             is KeyboardIntent.OpenModelPicker -> viewModel.openModelPicker()
             is KeyboardIntent.CloseModelPicker -> viewModel.closeModelPicker()
             is KeyboardIntent.SelectModel -> viewModel.selectModel(intent.modelId)

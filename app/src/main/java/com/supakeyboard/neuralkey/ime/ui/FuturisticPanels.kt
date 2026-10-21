@@ -15,6 +15,7 @@ import android.speech.SpeechRecognizer
 import android.widget.ImageView
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -22,6 +23,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -67,18 +69,31 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -99,10 +114,13 @@ import com.supakeyboard.neuralkey.ime.voice.WavAudioRecorder
 import com.supakeyboard.neuralkey.ui.settings.SettingsActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.nio.ByteBuffer
 import java.util.Locale
+import kotlin.math.sin
+import kotlin.math.abs
 
 private fun onThemeAccent(color: Color): Color {
     return if (color.luminance() > 0.42f) Color(0xFF090A0F) else Color.White
@@ -570,6 +588,55 @@ private fun ArenaModelColumn(
     }
 }
 
+/** Seconds between live-transcript chunks while recording (cloud-chunked partial results). */
+private const val LIVE_CHUNK_INTERVAL_MS = 3_000L
+
+/** Minimum audio per live chunk: ~1.2 s of 16 kHz, 16-bit mono PCM. */
+private const val LIVE_MIN_CHUNK_BYTES = 38_400
+
+/** After this many consecutive live-chunk failures the live preview pauses (final pass still runs on Stop). */
+private const val LIVE_MAX_CONSECUTIVE_FAILURES = 2
+
+/**
+ * Animated equalizer bars driven by the microphone RMS level.
+ */
+@Composable
+private fun VoiceWaveform(
+    level: Float,
+    active: Boolean,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "voiceWave")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2.0 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = LinearEasing)
+        ),
+        label = "wavePhase"
+    )
+    Canvas(modifier = modifier) {
+        val bars = 11
+        val barWidth = size.width / (bars * 2f - 1f)
+        val clamped = level.coerceIn(0f, 1f)
+        for (i in 0 until bars) {
+            val fraction = if (active) {
+                (0.16f + 0.84f * clamped * (0.35f + 0.65f * abs(sin(phase + i * 0.75f)))).coerceIn(0.12f, 1f)
+            } else {
+                0.14f
+            }
+            val barHeight = size.height * fraction
+            drawRoundRect(
+                color = color.copy(alpha = if (active) 0.95f else 0.35f),
+                topLeft = Offset(i * 2f * barWidth, (size.height - barHeight) / 2f),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+            )
+        }
+    }
+}
+
 /**
  * 3. Scribe v2 / Voxtral / Multimodal Voice-to-Action AI Studio Panel.
  *
@@ -581,6 +648,10 @@ private fun ArenaModelColumn(
  * - Captures raw 16kHz 16-bit mono PCM WAV audio via [WavAudioRecorder] with hardware NoiseSuppressor + AutomaticGainControl.
  * - Eliminates repetitive word duplication on phones by strictly separating `committedTranscript` and `livePartialTranscript`
  *   and passing all transcripts through [VoiceAudioEngine.mergeRecognizedSegment] + [VoiceAudioEngine.cleanRepetitiveSpeech].
+ * - Live transcript: while recording, 3-second audio chunks are transcribed with the selected voice model and streamed into
+ *   the transcript card in real time (toggle in Settings → Typing → Voice-to-Action). The final full-audio pass on Stop is
+ *   authoritative and replaces the live preview; if it fails the live text is kept.
+ * - Smart Polish / Smart Grammar / Smart Rephrase transforms, with a Retry icon on the result card.
  */
 @Composable
 fun VoiceToActionPanel(
@@ -598,6 +669,8 @@ fun VoiceToActionPanel(
         mutableStateOf(VoiceAudioEngine.cleanRepetitiveSpeech(uiState.currentDraft))
     }
     var livePartialTranscript by remember { mutableStateOf("") }
+    // Transcript as it was before the current recording started (lets us re-run / replace a recording cleanly).
+    var transcriptBeforeRecording by remember { mutableStateOf("") }
     val displayTranscript = remember(committedTranscript, livePartialTranscript) {
         if (livePartialTranscript.isNotBlank()) {
             VoiceAudioEngine.mergeRecognizedSegment(committedTranscript, livePartialTranscript)
@@ -606,15 +679,21 @@ fun VoiceToActionPanel(
         }
     }
 
+    // Measured panel height: compact postures (e.g. landscape) hide optional rows so the transcript keeps room.
+    var panelHeightPx by remember { mutableIntStateOf(0) }
+    val roomyPanel = panelHeightPx == 0 || panelHeightPx >= with(LocalDensity.current) { 250.dp.roundToPx() }
     var isListening by remember { mutableStateOf(false) }
     var isTranscribingCloud by remember { mutableStateOf(false) }
     var rmsLevel by remember { mutableFloatStateOf(0f) }
     var lastRecordedWavBase64 by remember { mutableStateOf<String?>(null) }
 
+    val liveTranscriptEnabled = uiState.liveTranscriptEnabled
     val voiceModels = uiState.availableVoiceModels
     val activeVoiceModel = remember(voiceModels, uiState.selectedVoiceModelId) {
         voiceModels.firstOrNull { it.id == uiState.selectedVoiceModelId } ?: voiceModels.first()
     }
+    val latestVoiceModelId by rememberUpdatedState(activeVoiceModel.id)
+    val latestLiveEnabled by rememberUpdatedState(liveTranscriptEnabled)
 
     var voiceStatus by remember(activeVoiceModel) {
         mutableStateOf("Ready • ${activeVoiceModel.name} (${activeVoiceModel.badge})")
@@ -690,6 +769,7 @@ fun VoiceToActionPanel(
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
+                if (!latestLiveEnabled) return
                 val partial = partialResults
                     ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                     ?.firstOrNull()
@@ -714,6 +794,49 @@ fun VoiceToActionPanel(
         }
     }
 
+    // Live transcript: while the HD WAV recorder is running, transcribe fresh 3-second audio chunks
+    // with the selected voice model and stream them into the transcript card.
+    LaunchedEffect(isListening, liveTranscriptEnabled) {
+        if (!isListening || !liveTranscriptEnabled || !wavRecorder.isRecording) return@LaunchedEffect
+        val repo = runCatching { NeuralKeyApplication.instance.openRouterRepository }.getOrNull()
+            ?: return@LaunchedEffect
+        livePartialTranscript = ""
+        var cursor = 0
+        var failures = 0
+        while (isActive && wavRecorder.isRecording) {
+            delay(LIVE_CHUNK_INTERVAL_MS)
+            if (!isActive || !wavRecorder.isRecording) break
+            val end = wavRecorder.capturedPcmSize()
+            if (end - cursor < LIVE_MIN_CHUNK_BYTES) continue
+            val chunkPcm = wavRecorder.copyPcmRange(cursor, end)
+            if (chunkPcm.isEmpty()) continue
+            val chunkWav = VoiceAudioEngine.encodePcmToWavBase64(chunkPcm, 16000)
+            val result = repo.transcribeVoiceAudioToText(
+                base64AudioWav = chunkWav,
+                preferredVoiceModelId = latestVoiceModelId
+            )
+            if (!isActive || !wavRecorder.isRecording) break
+            val text = result.getOrNull()?.trim().orEmpty()
+            if (text.isNotBlank()) {
+                livePartialTranscript = VoiceAudioEngine.mergeRecognizedSegment(livePartialTranscript, text)
+                cursor = end
+                failures = 0
+            } else {
+                val message = result.exceptionOrNull()?.message.orEmpty()
+                if (message.contains("No speech", ignoreCase = true)) {
+                    // Silence in this window — skip it instead of re-sending it next time
+                    cursor = end
+                } else {
+                    failures++
+                    if (failures >= LIVE_MAX_CONSECUTIVE_FAILURES) {
+                        voiceStatus = "Live preview paused • full transcript appears when you stop"
+                        break
+                    }
+                }
+            }
+        }
+    }
+
     val pulseTransition = rememberInfiniteTransition(label = "micPulse")
     val basePulse by pulseTransition.animateFloat(
         initialValue = 1.0f,
@@ -725,6 +848,7 @@ fun VoiceToActionPanel(
         label = "micScale"
     )
     val micScale = if (isListening) (basePulse + rmsLevel * 0.12f).coerceAtMost(1.26f) else 1f
+    val glowScale = 1f + (micScale - 1f) * 1.2f
 
     fun startFallbackSpeechRecognizer() {
         if (speechRecognizer == null) {
@@ -734,7 +858,7 @@ fun VoiceToActionPanel(
         val recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, liveTranscriptEnabled)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
         runCatching {
@@ -743,6 +867,38 @@ fun VoiceToActionPanel(
             isListening = true
         }.onFailure {
             voiceStatus = "Could not start microphone: ${it.localizedMessage}"
+        }
+    }
+
+    fun transcribeRecordedWav(wavBase64: String) {
+        isTranscribingCloud = true
+        voiceStatus = "Transcribing via ${activeVoiceModel.name}..."
+        scope.launch {
+            val repo = runCatching { NeuralKeyApplication.instance.openRouterRepository }.getOrNull()
+            val result = repo?.transcribeVoiceAudioToText(
+                base64AudioWav = wavBase64,
+                preferredVoiceModelId = activeVoiceModel.id
+            )
+            isTranscribingCloud = false
+            val transcript = result?.getOrNull()?.trim().orEmpty()
+            if (transcript.isNotBlank()) {
+                // The full-audio pass is authoritative: it replaces whatever the live preview showed.
+                committedTranscript = VoiceAudioEngine.mergeRecognizedSegment(transcriptBeforeRecording, transcript)
+                livePartialTranscript = ""
+                voiceStatus = "Transcribed by ${activeVoiceModel.name}! Tap Apply below."
+            } else {
+                val err = result?.exceptionOrNull()?.localizedMessage ?: "Check OpenRouter API key"
+                if (livePartialTranscript.isNotBlank()) {
+                    committedTranscript = VoiceAudioEngine.mergeRecognizedSegment(
+                        transcriptBeforeRecording,
+                        livePartialTranscript
+                    )
+                    livePartialTranscript = ""
+                    voiceStatus = "Kept live transcript • final pass failed: $err"
+                } else {
+                    voiceStatus = "${activeVoiceModel.name}: $err • Tap ⟳ to retry or Apply to stream audio directly"
+                }
+            }
         }
     }
 
@@ -757,38 +913,30 @@ fun VoiceToActionPanel(
                     onIntent(KeyboardIntent.ProcessVoiceAudioWav(wavBase64, selectedTransform))
                     return
                 }
-                isTranscribingCloud = true
-                voiceStatus = "Transcribing via ${activeVoiceModel.name}..."
-                scope.launch {
-                    val repo = runCatching { NeuralKeyApplication.instance.openRouterRepository }.getOrNull()
-                    val result = repo?.transcribeVoiceAudioToText(
-                        base64AudioWav = wavBase64,
-                        preferredVoiceModelId = activeVoiceModel.id
-                    )
-                    isTranscribingCloud = false
-                    val transcript = result?.getOrNull()?.trim().orEmpty()
-                    if (transcript.isNotBlank()) {
-                        committedTranscript = VoiceAudioEngine.mergeRecognizedSegment(committedTranscript, transcript)
-                        voiceStatus = "Transcribed by ${activeVoiceModel.name}! Tap Apply below."
-                    } else {
-                        val err = result?.exceptionOrNull()?.localizedMessage ?: "Check OpenRouter API key"
-                        voiceStatus = "${activeVoiceModel.name}: $err • Tap Apply to stream audio directly"
-                    }
-                }
+                transcribeRecordedWav(wavBase64)
                 return
             }
+            livePartialTranscript = ""
+            voiceStatus = "Recording too short • tap the mic and speak again"
+            return
         }
         runCatching { speechRecognizer?.stopListening() }
     }
 
+    val accentBrush = Brush.linearGradient(listOf(theme.accentPrimary, theme.accentSecondary))
+    val recordBrush = Brush.linearGradient(listOf(Color(0xFFEF4444), Color(0xFFF97316)))
+    val canApply = isListening || displayTranscript.isNotBlank() || !lastRecordedWavBase64.isNullOrBlank()
+    val canRetranscribe = !lastRecordedWavBase64.isNullOrBlank() && !isListening && !isTranscribingCloud
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { panelHeightPx = it.height }
             .background(theme.previewCardBg)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // 1. Header Row
+        // 1. Header Row (Title + Live Badge + Waveform + Clear + Close)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -798,17 +946,73 @@ fun VoiceToActionPanel(
                     .weight(1f)
                     .padding(end = 6.dp)
             ) {
-                Text(
-                    text = "🎙️ Voice-to-Action Studio (Scribe v2 & Audio AI)",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = theme.keyTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "🎙️ Voice-to-Action Studio",
+                        fontSize = 12.sp,
+                        lineHeight = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = theme.keyTextColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val badgeText: String
+                    val badgeColor: Color
+                    when {
+                        isListening && liveTranscriptEnabled -> {
+                            badgeText = "● LIVE"
+                            badgeColor = Color(0xFFEF4444)
+                        }
+                        isListening -> {
+                            badgeText = "● REC"
+                            badgeColor = Color(0xFFEF4444)
+                        }
+                        isTranscribingCloud -> {
+                            badgeText = "⚡ AI"
+                            badgeColor = theme.accentSecondary
+                        }
+                        liveTranscriptEnabled -> {
+                            badgeText = "LIVE ON"
+                            badgeColor = Color(0xFF10B981)
+                        }
+                        else -> {
+                            badgeText = "LIVE OFF"
+                            badgeColor = theme.keySecondaryTextColor
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .testTag("voice_live_status_badge")
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(badgeColor.copy(alpha = 0.16f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            fontSize = 8.sp,
+                            lineHeight = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = badgeColor,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                    VoiceWaveform(
+                        level = rmsLevel,
+                        active = isListening,
+                        color = if (isListening) Color(0xFFEF4444) else theme.accentPrimary,
+                        modifier = Modifier
+                            .width(40.dp)
+                            .height(11.dp)
+                    )
+                }
                 Text(
                     text = voiceStatus,
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
+                    lineHeight = 11.sp,
                     color = if (needsMicPermission) Color(0xFFF59E0B) else theme.keySecondaryTextColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -828,11 +1032,12 @@ fun VoiceToActionPanel(
                             }
                             runCatching { context.startActivity(intent) }
                         }
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = "Grant Mic",
-                        fontSize = 10.sp,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFFFBBF24),
                         maxLines = 1,
@@ -845,23 +1050,23 @@ fun VoiceToActionPanel(
             if (displayTranscript.isNotBlank() || lastRecordedWavBase64 != null) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(7.dp))
+                        .size(24.dp)
+                        .clip(CircleShape)
                         .background(theme.keyFunctionalBgColor)
                         .clickable {
                             committedTranscript = ""
                             livePartialTranscript = ""
+                            transcriptBeforeRecording = ""
                             lastRecordedWavBase64 = null
                             voiceStatus = "Cleared • Ready (${activeVoiceModel.name})"
-                        }
-                        .padding(horizontal = 7.dp, vertical = 4.dp)
+                        },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Clear",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFF87171),
-                        maxLines = 1,
-                        softWrap = false
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Clear transcript",
+                        tint = Color(0xFFF87171),
+                        modifier = Modifier.size(14.dp)
                     )
                 }
                 Spacer(modifier = Modifier.width(4.dp))
@@ -869,13 +1074,13 @@ fun VoiceToActionPanel(
 
             IconButton(
                 onClick = { onIntent(KeyboardIntent.CloseVoiceAction) },
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(26.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Close Voice Studio",
                     tint = theme.keyFunctionalTextColor,
-                    modifier = Modifier.size(17.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
@@ -891,6 +1096,7 @@ fun VoiceToActionPanel(
             Text(
                 text = "🎧 Voice Model:",
                 fontSize = 10.sp,
+                lineHeight = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = theme.accentPrimary,
                 maxLines = 1,
@@ -902,20 +1108,21 @@ fun VoiceToActionPanel(
                 val borderCol = if (isSelected) theme.accentPrimary else theme.keyFunctionalBgColor
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(bg)
-                        .border(1.dp, borderCol, RoundedCornerShape(8.dp))
+                        .border(1.dp, borderCol, RoundedCornerShape(10.dp))
                         .clickable {
                             onIntent(KeyboardIntent.SelectVoiceModel(model.id))
                             voiceStatus = "Switched to ${model.name} (${model.badge})"
                         }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         text = model.name,
                         fontSize = 10.sp,
+                        lineHeight = 12.sp,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = if (isSelected) theme.accentPrimary else theme.keyTextColor,
                         maxLines = 1,
@@ -933,6 +1140,7 @@ fun VoiceToActionPanel(
                         Text(
                             text = model.badge,
                             fontSize = 8.sp,
+                            lineHeight = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (model.isFree) Color(0xFF34D399) else theme.keySecondaryTextColor,
                             maxLines = 1,
@@ -943,7 +1151,7 @@ fun VoiceToActionPanel(
             }
         }
 
-        // 3. Transform Mode Selector Strip (including 🇸🇰 Voice → Slovak)
+        // 3. Transform Mode Selector Strip (Smart Polish / Grammar / Rephrase, Email, Bullets, English, Slovak, Raw)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -952,26 +1160,30 @@ fun VoiceToActionPanel(
         ) {
             VoiceTransformMode.entries.forEach { mode ->
                 val selected = selectedTransform == mode
-                val chipBg by animateColorAsState(
-                    targetValue = if (selected) theme.accentPrimary else theme.keyBgColor,
-                    label = "voiceChipBg"
+                val chipFg by animateColorAsState(
+                    targetValue = if (selected) onThemeAccent(theme.accentPrimary) else theme.keyTextColor,
+                    label = "voiceChipFg"
                 )
-                val chipFg = if (selected) onThemeAccent(theme.accentPrimary) else theme.keyTextColor
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(9.dp))
-                        .background(chipBg)
+                        .testTag("voice_transform_${mode.name}")
+                        .clip(RoundedCornerShape(12.dp))
+                        .then(
+                            if (selected) Modifier.background(accentBrush)
+                            else Modifier.background(theme.keyBgColor)
+                        )
                         .border(
                             1.dp,
                             if (selected) theme.accentPrimary else theme.keyFunctionalBgColor,
-                            RoundedCornerShape(9.dp)
+                            RoundedCornerShape(12.dp)
                         )
                         .clickable { selectedTransform = mode }
-                        .padding(horizontal = 9.dp, vertical = 4.dp)
+                        .padding(horizontal = 10.dp, vertical = 3.dp)
                 ) {
                     Text(
                         text = "${mode.emoji} ${mode.label}",
                         fontSize = 10.sp,
+                        lineHeight = 12.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         color = chipFg,
                         maxLines = 1,
@@ -981,7 +1193,7 @@ fun VoiceToActionPanel(
             }
         }
 
-        // 4. Center Mic + Clean Transcript Preview Box
+        // 4. Center Mic + Live Transcript Card
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -989,168 +1201,267 @@ fun VoiceToActionPanel(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp)
         ) {
-            // Pulsing HD WAV Microphone Button
+            // Pulsing HD WAV Microphone Button with glow ring
             Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .scale(micScale)
-                    .clip(CircleShape)
-                    .background(
-                        when {
-                            isListening -> Color(0xFFEF4444)
-                            isTranscribingCloud -> theme.accentSecondary
-                            else -> theme.accentPrimary
-                        }
-                    )
-                    .clickable(enabled = !isTranscribingCloud) {
-                        if (isListening) {
-                            stopRecordingAndTranscribe(autoRunTransform = false)
-                        } else {
-                            val hasPerm = ContextCompat.checkSelfPermission(
-                                context,
-                                Manifest.permission.RECORD_AUDIO
-                            ) == PackageManager.PERMISSION_GRANTED
-                            needsMicPermission = !hasPerm
-                            if (!hasPerm) {
-                                voiceStatus = "Mic permission required. Tap 'Grant Mic' above."
-                            } else {
-                                // Start hardware 16kHz PCM WAV recording for Scribe v2 / OpenRouter Audio
-                                val startedWav = wavRecorder.start()
-                                if (startedWav) {
-                                    isListening = true
-                                    voiceStatus = "Recording 16kHz HD WAV for ${activeVoiceModel.name}... Tap Stop when done"
-                                } else {
-                                    startFallbackSpeechRecognizer()
-                                }
-                            }
-                        }
-                    },
+                modifier = Modifier.size(56.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (isTranscribingCloud) {
-                    CircularProgressIndicator(
-                        color = onThemeAccent(theme.accentSecondary),
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(22.dp)
+                if (isListening) {
+                    Box(
+                        modifier = Modifier
+                            .size(50.dp)
+                            .scale(glowScale)
+                            .clip(CircleShape)
+                            .background(Color(0xFFEF4444).copy(alpha = 0.20f))
                     )
-                } else {
-                    Icon(
-                        imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                        contentDescription = if (isListening) "Stop Recording" else "Start Voice Input",
-                        tint = if (isListening) Color.White else onThemeAccent(theme.accentPrimary),
-                        modifier = Modifier.size(24.dp)
-                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .testTag("voice_mic_button")
+                        .size(46.dp)
+                        .scale(micScale)
+                        .clip(CircleShape)
+                        .background(
+                            when {
+                                isListening -> recordBrush
+                                isTranscribingCloud -> Brush.linearGradient(
+                                    listOf(theme.accentSecondary, theme.accentSecondary)
+                                )
+                                else -> accentBrush
+                            }
+                        )
+                        .clickable(enabled = !isTranscribingCloud) {
+                            if (isListening) {
+                                stopRecordingAndTranscribe(autoRunTransform = false)
+                            } else {
+                                val hasPerm = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO
+                                ) == PackageManager.PERMISSION_GRANTED
+                                needsMicPermission = !hasPerm
+                                if (!hasPerm) {
+                                    voiceStatus = "Mic permission required. Tap 'Grant Mic' above."
+                                } else {
+                                    transcriptBeforeRecording = committedTranscript
+                                    livePartialTranscript = ""
+                                    // Start hardware 16kHz PCM WAV recording for Scribe v2 / OpenRouter Audio
+                                    val startedWav = wavRecorder.start()
+                                    if (startedWav) {
+                                        isListening = true
+                                        voiceStatus = if (liveTranscriptEnabled) {
+                                            "Recording • live transcript on • tap Stop when done"
+                                        } else {
+                                            "Recording HD audio for ${activeVoiceModel.name}... Tap Stop when done"
+                                        }
+                                    } else {
+                                        startFallbackSpeechRecognizer()
+                                    }
+                                }
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isTranscribingCloud) {
+                        CircularProgressIndicator(
+                            color = onThemeAccent(theme.accentSecondary),
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = if (isListening) "Stop Recording" else "Start Voice Input",
+                            tint = if (isListening) Color.White else onThemeAccent(theme.accentPrimary),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
 
-            // Deduplicated Spoken Transcript / Brain-Dump Box
+            // Live Transcript Card (committed text + dimmed live tail)
             Column(
                 modifier = Modifier
+                    .testTag("voice_transcript_card")
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(theme.keyBgColor)
-                    .border(1.dp, theme.keyFunctionalBgColor, RoundedCornerShape(10.dp))
-                    .padding(7.dp),
+                    .border(
+                        1.dp,
+                        if (isListening) Color(0xFFEF4444).copy(alpha = 0.65f) else theme.keyFunctionalBgColor,
+                        RoundedCornerShape(12.dp)
+                    )
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = when {
-                        isListening && displayTranscript.isBlank() ->
-                            "🔴 Listening in 16kHz HD Audio... speak naturally (stutters & repeated words are automatically filtered)."
-                        isTranscribingCloud && displayTranscript.isBlank() ->
-                            "⚡ Processing voice audio via ${activeVoiceModel.name}..."
-                        displayTranscript.isBlank() ->
-                            "Tap Mic to dictate with ${activeVoiceModel.name}, or pick a quick voice test below..."
-                        else -> displayTranscript
-                    },
-                    fontSize = 11.sp,
-                    lineHeight = 14.sp,
-                    color = if (displayTranscript.isBlank()) theme.keySecondaryTextColor else theme.keyTextColor,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                // Quick sample voice brain-dumps for instant testing
-                Row(
+                val transcriptScroll = rememberScrollState()
+                LaunchedEffect(displayTranscript) {
+                    transcriptScroll.scrollTo(transcriptScroll.maxValue)
+                }
+                val liveTailColor = theme.keySecondaryTextColor
+                val transcriptText = remember(displayTranscript, committedTranscript, livePartialTranscript, liveTailColor) {
+                    buildAnnotatedString {
+                        val tail = if (livePartialTranscript.isNotBlank() &&
+                            displayTranscript.startsWith(committedTranscript)
+                        ) {
+                            displayTranscript.substring(committedTranscript.length)
+                        } else {
+                            ""
+                        }
+                        append(displayTranscript.substring(0, displayTranscript.length - tail.length))
+                        if (tail.isNotEmpty()) {
+                            withStyle(SpanStyle(color = liveTailColor, fontStyle = FontStyle.Italic)) {
+                                append(tail)
+                            }
+                        }
+                    }
+                }
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        .weight(1f)
+                        .verticalScroll(transcriptScroll)
                 ) {
-                    listOf(
-                        "🎙️ Sync Update" to "hey team we finished the v1.3 release build let's move our qa sync to 3pm tomorrow",
-                        "🎙️ Client Follow-Up" to "hi alex just following up on the proposal from tuesday let me know if you have any questions",
-                        "🇸🇰 Slovak Test" to "Good morning team, thank you for your help with the new release today."
-                    ).forEach { (label, sample) ->
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(theme.keyFunctionalBgColor)
-                                .clickable {
-                                    committedTranscript = VoiceAudioEngine.cleanRepetitiveSpeech(sample)
-                                    livePartialTranscript = ""
-                                }
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 9.sp,
-                                color = theme.accentPrimary,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
+                    when {
+                        displayTranscript.isNotBlank() -> Text(
+                            text = transcriptText,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            color = theme.keyTextColor
+                        )
+                        isListening -> Text(
+                            text = if (liveTranscriptEnabled) {
+                                "🔴 Listening... your words appear here live as you speak (stutters & repeats are filtered)."
+                            } else {
+                                "🔴 Recording HD audio... your transcript appears after you tap Stop."
+                            },
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            color = theme.keySecondaryTextColor
+                        )
+                        isTranscribingCloud -> Text(
+                            text = "⚡ Processing voice audio via ${activeVoiceModel.name}...",
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            color = theme.keySecondaryTextColor
+                        )
+                        else -> Text(
+                            text = "Tap the mic to dictate with ${activeVoiceModel.name}, or try a quick sample below.",
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            color = theme.keySecondaryTextColor
+                        )
+                    }
+                }
+
+                // Quick sample voice brain-dumps for instant testing (only while the card is empty)
+                if (roomyPanel && displayTranscript.isBlank() && !isListening && !isTranscribingCloud) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        listOf(
+                            "🎙️ Sync Update" to "hey team we finished the v1.3 release build let's move our qa sync to 3pm tomorrow",
+                            "🎙️ Client Follow-Up" to "hi alex just following up on the proposal from tuesday let me know if you have any questions",
+                            "🇸🇰 Slovak Test" to "Good morning team, thank you for your help with the new release today."
+                        ).forEach { (label, sample) ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(theme.keyFunctionalBgColor)
+                                    .clickable {
+                                        committedTranscript = VoiceAudioEngine.cleanRepetitiveSpeech(sample)
+                                        transcriptBeforeRecording = ""
+                                        livePartialTranscript = ""
+                                    }
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 9.sp,
+                                    lineHeight = 11.sp,
+                                    color = theme.accentPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // 5. Bottom Action Bar
+        // 5. Bottom Action Bar: gradient Apply + re-transcribe (retry) icon
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Button(
-                onClick = {
-                    if (isListening && wavRecorder.isRecording) {
-                        stopRecordingAndTranscribe(autoRunTransform = true)
-                    } else if (displayTranscript.isNotBlank()) {
-                        onIntent(
-                            KeyboardIntent.ProcessVoiceTranscript(
-                                transcript = VoiceAudioEngine.cleanRepetitiveSpeech(displayTranscript),
-                                transformMode = selectedTransform
-                            )
-                        )
-                    } else if (!lastRecordedWavBase64.isNullOrBlank()) {
-                        onIntent(
-                            KeyboardIntent.ProcessVoiceAudioWav(
-                                base64Wav = lastRecordedWavBase64!!,
-                                transformMode = selectedTransform
-                            )
-                        )
-                    }
-                },
-                enabled = isListening || displayTranscript.isNotBlank() || !lastRecordedWavBase64.isNullOrBlank(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 5.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = theme.accentPrimary),
+            Box(
                 modifier = Modifier
+                    .testTag("voice_apply_button")
                     .weight(1f)
                     .height(32.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accentBrush, alpha = if (canApply) 1f else 0.35f)
+                    .clickable(enabled = canApply) {
+                        if (isListening && wavRecorder.isRecording) {
+                            stopRecordingAndTranscribe(autoRunTransform = true)
+                        } else if (displayTranscript.isNotBlank()) {
+                            onIntent(
+                                KeyboardIntent.ProcessVoiceTranscript(
+                                    transcript = VoiceAudioEngine.cleanRepetitiveSpeech(displayTranscript),
+                                    transformMode = selectedTransform
+                                )
+                            )
+                        } else if (!lastRecordedWavBase64.isNullOrBlank()) {
+                            onIntent(
+                                KeyboardIntent.ProcessVoiceAudioWav(
+                                    base64Wav = lastRecordedWavBase64!!,
+                                    transformMode = selectedTransform
+                                )
+                            )
+                        }
+                    }
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (isListening) {
                         "⏹ Stop & Apply ${selectedTransform.emoji} ${selectedTransform.label}"
                     } else {
-                        "${selectedTransform.emoji} Apply ${selectedTransform.label} (${activeVoiceModel.name.substringAfter(": ")})"
+                        "${selectedTransform.emoji} Apply ${selectedTransform.label}"
                     },
                     fontSize = 11.sp,
+                    lineHeight = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = onThemeAccent(theme.accentPrimary),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+
+            if (canRetranscribe) {
+                Box(
+                    modifier = Modifier
+                        .testTag("voice_retranscribe_button")
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(theme.keyBgColor)
+                        .border(1.dp, theme.accentPrimary.copy(alpha = 0.6f), CircleShape)
+                        .clickable { lastRecordedWavBase64?.let { transcribeRecordedWav(it) } },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Re-transcribe recording",
+                        tint = theme.accentPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
     }

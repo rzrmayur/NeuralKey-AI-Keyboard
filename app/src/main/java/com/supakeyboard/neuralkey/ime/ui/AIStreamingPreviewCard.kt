@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -42,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -174,6 +176,46 @@ fun AIStreamingPreviewCard(
                 }
             }
 
+            // Error recovery: one-tap Retry when the provider failed
+            AnimatedVisibility(
+                visible = !streamingMode.isStreaming && streamingMode.error != null && streamingMode.canRetry,
+                enter = fadeIn(animationSpec = tween(250)),
+                exit = fadeOut(animationSpec = tween(150))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .testTag("ai_retry_error_button")
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(theme.accentPrimary, theme.accentSecondary)
+                            )
+                        )
+                        .clickable { onIntent(KeyboardIntent.RetryAIStreaming) }
+                        .padding(vertical = 9.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Text(
+                            text = "Retry",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
             // Action Buttons Bar with scale-in + fade-in animation when streaming completes
             AnimatedVisibility(
                 visible = !streamingMode.isStreaming && streamingMode.error == null && streamingMode.streamedText.isNotBlank(),
@@ -246,6 +288,27 @@ fun AIStreamingPreviewCard(
                                 color = Color.White,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    // Retry: re-run the same request for a fresh variation
+                    if (streamingMode.canRetry) {
+                        Box(
+                            modifier = Modifier
+                                .testTag("ai_retry_button")
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF27272A))
+                                .border(1.dp, theme.accentPrimary.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                .clickable { onIntent(KeyboardIntent.RetryAIStreaming) }
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Retry",
+                                tint = theme.accentPrimary,
+                                modifier = Modifier.size(15.dp)
                             )
                         }
                     }

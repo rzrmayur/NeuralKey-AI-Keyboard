@@ -391,6 +391,20 @@ class WavAudioRecorder(
         return true
     }
 
+    /** Number of PCM bytes captured so far in the current recording (thread-safe). */
+    fun capturedPcmSize(): Int = synchronized(pcmOutput) { pcmOutput.size() }
+
+    /**
+     * Returns a copy of the PCM bytes in `[fromByte, toByte)` captured so far, aligned to whole
+     * 16-bit samples. Used by Voice-to-Action's live transcript to transcribe audio while recording.
+     */
+    fun copyPcmRange(fromByte: Int, toByte: Int): ByteArray {
+        val all = synchronized(pcmOutput) { pcmOutput.toByteArray() }
+        val start = (fromByte.coerceIn(0, all.size)) and 1.inv()
+        val end = (toByte.coerceIn(start, all.size)) and 1.inv()
+        return if (end > start) all.copyOfRange(start, end) else ByteArray(0)
+    }
+
     fun stopAndEncodeWavBase64(): String? {
         if (!isRecording) return null
         isRecording = false

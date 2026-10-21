@@ -50,6 +50,14 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
     private var arenaJobA: Job? = null
     private var arenaJobB: Job? = null
 
+    /** Remembers the last AI request so the preview card can offer a one-tap Retry. */
+    private sealed interface LastAIRequest {
+        data class Text(val instruction: String, val draft: String) : LastAIRequest
+        data class VoiceWav(val base64Wav: String, val mode: VoiceTransformMode) : LastAIRequest
+    }
+
+    private var lastAIRequest: LastAIRequest? = null
+
     init {
         val repo = repository
         val prefs = preferences
@@ -80,6 +88,11 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
             viewModelScope.launch {
                 prefs.glideTypingEnabled.collect { enabled ->
                     _uiState.update { it.copy(glideTypingEnabled = enabled) }
+                }
+            }
+            viewModelScope.launch {
+                prefs.liveTranscriptEnabled.collect { enabled ->
+                    _uiState.update { it.copy(liveTranscriptEnabled = enabled) }
                 }
             }
             viewModelScope.launch {
@@ -486,6 +499,7 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
 
     fun processVoiceAudioWav(base64Wav: String, transformMode: VoiceTransformMode) {
         val repo = repository ?: return
+        lastAIRequest = LastAIRequest.VoiceWav(base64Wav, transformMode)
         val selectedVoiceId = _uiState.value.selectedVoiceModelId
         val voiceModelName = _uiState.value.availableVoiceModels
             .firstOrNull { it.id == selectedVoiceId }?.name
@@ -496,7 +510,8 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                     originalText = "[Voice Recording]",
                     streamedText = "",
                     isStreaming = true,
-                    modelUsed = voiceModelName
+                    modelUsed = voiceModelName,
+                    canRetry = true
                 )
             )
         }
@@ -560,11 +575,27 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(mode = KeyboardMode.TypingMode()) }
     }
 
+    /**
+     * Re-runs the most recent AI / Voice-to-Action request (same instruction, same input) so the user
+     * can get a fresh variation or recover from a transient provider error with a single tap.
+     */
+    fun retryAIStreaming() {
+        val current = _uiState.value.mode as? KeyboardMode.AIStreamingMode ?: return
+        if (current.isStreaming) return
+        when (val request = lastAIRequest) {
+            is LastAIRequest.Text -> startAIStreaming(request.instruction, request.draft)
+            is LastAIRequest.VoiceWav -> processVoiceAudioWav(request.base64Wav, request.mode)
+            null -> Unit
+        }
+    }
+
     fun commitAIResult() {
+        lastAIRequest = null
         _uiState.update { it.copy(mode = KeyboardMode.TypingMode()) }
     }
 
     fun cancelAIStreaming() {
+        lastAIRequest = null
         streamingJob?.cancel()
         streamingJob = null
         arenaJobA?.cancel()
@@ -623,13 +654,15 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
     fun startAIStreaming(promptInstruction: String, draftText: String) {
         val repo = repository ?: return
         val modelName = _uiState.value.activeModel?.name ?: "OpenRouter AI"
+        lastAIRequest = LastAIRequest.Text(promptInstruction, draftText)
         _uiState.update {
             it.copy(
                 mode = KeyboardMode.AIStreamingMode(
                     originalText = draftText,
                     streamedText = "",
                     isStreaming = true,
-                    modelUsed = modelName
+                    modelUsed = modelName,
+                    canRetry = true
                 )
             )
         }

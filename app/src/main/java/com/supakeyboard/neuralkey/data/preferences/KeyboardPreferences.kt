@@ -59,6 +59,9 @@ class KeyboardPreferences(private val context: Context) {
     val glideTypingEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_GLIDE_TYPING] ?: true }
     val splitKeyboardOnFold: Flow<Boolean> = dataStore.data.map { it[KEY_SPLIT_ON_FOLD] ?: true }
 
+    /** Live (as-you-speak) transcript preview inside Voice-to-Action. Enabled by default. */
+    val liveTranscriptEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_LIVE_TRANSCRIPT] ?: true }
+
     val oneHandedMode: Flow<OneHandedMode> = dataStore.data.map { preferences ->
         val raw = preferences[KEY_ONE_HANDED_MODE] ?: OneHandedMode.OFF.name
         runCatching { OneHandedMode.valueOf(raw) }.getOrDefault(OneHandedMode.OFF)
@@ -70,6 +73,7 @@ class KeyboardPreferences(private val context: Context) {
     suspend fun setNextWordPredictionEnabled(enabled: Boolean) { dataStore.edit { it[KEY_NEXT_WORD_PREDICTION] = enabled } }
     suspend fun setGlideTypingEnabled(enabled: Boolean) { dataStore.edit { it[KEY_GLIDE_TYPING] = enabled } }
     suspend fun setSplitKeyboardOnFold(enabled: Boolean) { dataStore.edit { it[KEY_SPLIT_ON_FOLD] = enabled } }
+    suspend fun setLiveTranscriptEnabled(enabled: Boolean) { dataStore.edit { it[KEY_LIVE_TRANSCRIPT] = enabled } }
     suspend fun setOneHandedMode(mode: OneHandedMode) { dataStore.edit { it[KEY_ONE_HANDED_MODE] = mode.name } }
 
     val selectedVoiceModelId: Flow<String> = dataStore.data.map { preferences ->
@@ -163,6 +167,7 @@ class KeyboardPreferences(private val context: Context) {
         private val KEY_NEXT_WORD_PREDICTION = booleanPreferencesKey("next_word_prediction_enabled")
         private val KEY_GLIDE_TYPING = booleanPreferencesKey("glide_typing_enabled")
         private val KEY_SPLIT_ON_FOLD = booleanPreferencesKey("split_keyboard_on_fold")
+        private val KEY_LIVE_TRANSCRIPT = booleanPreferencesKey("live_transcript_enabled")
         private val KEY_ONE_HANDED_MODE = stringPreferencesKey("one_handed_mode")
 
         const val DEFAULT_ACTIVE_MODEL = "google/gemini-2.5-flash"

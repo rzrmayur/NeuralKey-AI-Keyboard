@@ -908,6 +908,7 @@ private fun SmartTypingAndPostureTab(
     val keyMemoryEnabled by preferences.keyMemoryEnabled.collectAsState(initial = true)
     val nextWordEnabled by preferences.nextWordPredictionEnabled.collectAsState(initial = true)
     val glideTypingEnabled by preferences.glideTypingEnabled.collectAsState(initial = true)
+    val liveTranscriptEnabled by preferences.liveTranscriptEnabled.collectAsState(initial = true)
     val oneHandedMode by preferences.oneHandedMode.collectAsState(initial = OneHandedMode.OFF)
     val splitOnFold by preferences.splitKeyboardOnFold.collectAsState(initial = true)
     val hapticEnabled by preferences.hapticFeedbackEnabled.collectAsState(initial = true)
@@ -1245,6 +1246,64 @@ private fun SmartTypingAndPostureTab(
                     checked = soundEnabled,
                     accentColor = accentColor,
                     onCheckedChange = { scope.launch { preferences.setSoundFeedbackEnabled(it) } }
+                )
+            }
+        }
+
+        // 3b. Voice-to-Action Studio: Live Transcript Card
+        item {
+            GlassCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 10.dp)
+                    ) {
+                        Text(
+                            text = "🎙️ Voice-to-Action Studio",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Smart Polish, Smart Grammar & Smart Rephrase for your voice",
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(accentColor.copy(alpha = 0.18f))
+                            .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = "v1.3 NEW",
+                            color = accentColor,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                ModernToggleRow(
+                    title = "Live Transcript While Speaking",
+                    subtitle = "See your words appear in real time while recording. Turn off to see the transcript only after you tap Stop (uses fewer API calls)",
+                    checked = liveTranscriptEnabled,
+                    accentColor = accentColor,
+                    onCheckedChange = { scope.launch { preferences.setLiveTranscriptEnabled(it) } }
                 )
             }
         }

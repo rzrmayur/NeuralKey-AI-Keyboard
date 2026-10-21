@@ -24,6 +24,16 @@ enum class VoiceTransformMode(val label: String, val emoji: String, val instruct
         emoji = "✨",
         instruction = "Transform this spoken voice dictation into clean, well-punctuated, natural prose while removing filler words (um, uh, like)."
     ),
+    SMART_GRAMMAR(
+        label = "Smart Grammar",
+        emoji = "✅",
+        instruction = "Correct every grammar, spelling, punctuation, capitalization and verb-tense error in this spoken dictation. Remove filler words (um, uh, like) and stutters, but keep the speaker's exact meaning, wording, language and tone. Do not rephrase, summarize or add anything. Output ONLY the corrected text."
+    ),
+    SMART_REPHRASE(
+        label = "Smart Rephrase",
+        emoji = "🔄",
+        instruction = "Rephrase this spoken dictation into a clearer, smoother and more natural version of the same message. Keep the original meaning, language and approximate length, vary the wording and sentence structure where it improves flow, and do not add new facts. Output ONLY the rephrased text."
+    ),
     VOICE_TO_EMAIL(
         label = "Voice → Email",
         emoji = "✉️",
@@ -85,7 +95,8 @@ sealed interface KeyboardMode {
         val streamedText: String = "",
         val isStreaming: Boolean = true,
         val modelUsed: String = "",
-        val error: String? = null
+        val error: String? = null,
+        val canRetry: Boolean = false
     ) : KeyboardMode
 
     /**
@@ -177,6 +188,7 @@ sealed interface KeyboardIntent {
     data class TriggerCustomPrompt(val customInstruction: String) : KeyboardIntent
     data class CommitAIResult(val action: AICommitAction) : KeyboardIntent
     object CancelAIStreaming : KeyboardIntent
+    object RetryAIStreaming : KeyboardIntent
     object OpenModelPicker : KeyboardIntent
     object CloseModelPicker : KeyboardIntent
     data class SelectModel(val modelId: String) : KeyboardIntent
@@ -245,6 +257,7 @@ data class KeyboardUiState(
     val keyMemoryEnabled: Boolean = true,
     val nextWordPredictionEnabled: Boolean = true,
     val glideTypingEnabled: Boolean = true,
+    val liveTranscriptEnabled: Boolean = true,
     val oneHandedMode: OneHandedMode = OneHandedMode.OFF,
     val splitKeyboardOnFold: Boolean = true,
     val isSensitiveField: Boolean = false,
