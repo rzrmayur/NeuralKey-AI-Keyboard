@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
@@ -34,8 +37,26 @@ class SettingsDashboardLayoutTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    private var showContent by mutableStateOf(true)
+
+    private fun setDashboardContent() {
+        showContent = true
+        composeRule.setContent {
+            if (showContent) {
+                MaterialTheme(colorScheme = darkColorScheme()) {
+                    Box(modifier = Modifier.size(width = 360.dp, height = 780.dp)) {
+                        CompanionDashboard()
+                    }
+                }
+            }
+        }
+    }
+
     @After
     fun tearDown() {
+        // Remove the composition first so Room flows stop collecting before the DB is closed.
+        showContent = false
+        composeRule.waitForIdle()
         OpenRouterRepository.resetInstance()
         NeuralKeyDatabase.resetInstance()
         com.supakeyboard.neuralkey.ime.clipboard.ClipboardHistoryManager.resetInstance()
@@ -61,13 +82,7 @@ class SettingsDashboardLayoutTest {
 
     @Test
     fun setupNeededPillAndHeaderRenderHorizontallyOnCompactPhone() {
-        composeRule.setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Box(modifier = Modifier.size(width = 360.dp, height = 780.dp)) {
-                    CompanionDashboard()
-                }
-            }
-        }
+        setDashboardContent()
         composeRule.waitForIdle()
 
         val density = composeRule.density
@@ -114,13 +129,7 @@ class SettingsDashboardLayoutTest {
 
     @Test
     fun allFiveDashboardTabsRenderSingleLineHeadersAndActionButtons() {
-        composeRule.setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                Box(modifier = Modifier.size(width = 360.dp, height = 780.dp)) {
-                    CompanionDashboard()
-                }
-            }
-        }
+        setDashboardContent()
         composeRule.waitForIdle()
 
         // Tab 0: Setup
