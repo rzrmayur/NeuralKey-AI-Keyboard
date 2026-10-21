@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardIntent
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
 
+/** Minimum number of keys a swipe must cross to be decoded as a glide word instead of a tap or slide. */
+private const val MIN_GLIDE_KEYS = 3
+
 @Composable
 fun KeyboardGridView(
     uiState: KeyboardUiState,
@@ -79,11 +82,13 @@ fun KeyboardGridView(
         }
     }
 
+    val glideAllowed = uiState.glideTypingEnabled && !uiState.isSymbols && !isNumericField && !isPhoneField
+
     val handleGlideFinish: () -> Unit = {
         val path = glidedChars.toList()
         glidedChars.clear()
         glideTrailPoints.clear()
-        if (path.size >= 2) {
+        if (glideAllowed && path.size >= MIN_GLIDE_KEYS) {
             val rawSequence = buildString {
                 path.forEachIndexed { idx, c ->
                     if (idx == 0 && (uiState.isShifted || uiState.isCapsLocked)) {
@@ -94,6 +99,13 @@ fun KeyboardGridView(
                 }
             }
             onIntent(KeyboardIntent.GlideTypingPath(rawSequence))
+        } else {
+            // Not a glide: the finger only rolled or slid onto a neighbouring key. Commit the key
+            // currently under the finger (Gboard-style), so a drifting tap never turns into a random word.
+            path.lastOrNull()?.let { ch ->
+                val typed = if (uiState.isShifted || uiState.isCapsLocked) ch.uppercaseChar() else ch
+                onIntent(KeyboardIntent.KeyPress(typed.toString()))
+            }
         }
     }
 
@@ -113,7 +125,7 @@ fun KeyboardGridView(
                 }
                 .drawWithContent {
                     drawContent()
-                    if (glideTrailPoints.size >= 2) {
+                    if (glideTrailPoints.size >= 2 && glidedChars.size >= 2) {
                         val trailPath = Path().apply {
                             moveTo(glideTrailPoints.first().x, glideTrailPoints.first().y)
                             for (i in 1 until glideTrailPoints.size) {
@@ -197,7 +209,6 @@ fun KeyboardGridView(
                             imeAction = uiState.imeAction,
                             theme = theme,
                             onIntent = onIntent,
-                            glideTypingEnabled = uiState.glideTypingEnabled && !uiState.isSymbols && !isNumericField && !isPhoneField,
                             onCharacterKeyBoundsChanged = { ch, rect ->
                                 characterKeyBounds[ch] = rect
                             },

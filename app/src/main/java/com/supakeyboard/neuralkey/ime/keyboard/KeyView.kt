@@ -1,6 +1,7 @@
 package com.supakeyboard.neuralkey.ime.keyboard
 
 import android.view.inputmethod.EditorInfo
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -52,6 +53,12 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
+/**
+ * Finger-roll tolerance (dp). A touch that stays within this distance of where it started, or that
+ * lands within this margin around a key, is always treated as a tap on the original key.
+ */
+internal const val KEY_TAP_SLOP_DP = 8f
+
 @Composable
 fun RowScope.KeyView(
     key: KeyDefinition,
@@ -63,7 +70,6 @@ fun RowScope.KeyView(
     imeAction: Int,
     theme: com.supakeyboard.neuralkey.ime.theme.KeyboardTheme,
     onIntent: (KeyboardIntent) -> Unit,
-    glideTypingEnabled: Boolean = true,
     onCharacterKeyBoundsChanged: ((Char, Rect) -> Unit)? = null,
     onGlideUpdate: ((Char, Offset) -> Unit)? = null,
     onGlideFinish: (() -> Unit)? = null,
@@ -91,8 +97,9 @@ fun RowScope.KeyView(
     val dragStepThresholdPx = with(LocalDensity.current) { 12.dp.toPx() }
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.93f else 1.0f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 800f),
+        targetValue = if (isPressed) 0.95f else 1.0f,
+        // Critically damped and stiff: instant press-in, crisp release with no wobble.
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 2500f),
         label = "keyScale"
     )
 
@@ -126,7 +133,6 @@ fun RowScope.KeyView(
     val latestHaptics by rememberUpdatedState(hapticEnabled)
     val latestIntensity by rememberUpdatedState(hapticIntensity)
     val latestDisplay by rememberUpdatedState(displayText)
-    val latestGlideEnabled by rememberUpdatedState(glideTypingEnabled)
     val latestGlideUpdate by rememberUpdatedState(onGlideUpdate)
     val latestGlideFinish by rememberUpdatedState(onGlideFinish)
     val latestGlideCancel by rememberUpdatedState(onGlideCancel)
@@ -148,11 +154,12 @@ fun RowScope.KeyView(
     }
     val latestActivate by rememberUpdatedState(activate)
 
+    // The outer box owns the FULL key tile (no padding, no scale) so neighbouring keys tile the grid
+    // with zero dead zones and the hit area never shrinks while pressed. Visuals live in the inner box.
     Box(
         modifier = Modifier
             .weight(key.weight)
             .fillMaxHeight()
-            .padding(horizontal = 2.5.dp, vertical = 3.5.dp)
             .onGloballyPositioned { coords ->
                 keyRootPosition = coords.positionInRoot()
                 if (isAlphabeticKey) {
@@ -162,9 +169,6 @@ fun RowScope.KeyView(
                     )
                 }
             }
-            .scale(scale)
-            .clip(RoundedCornerShape(8.dp))
-            .background(keyBgColor)
             .semantics {
                 contentDescription = when (key.type) {
                     KeyType.BACKSPACE -> "Backspace"
@@ -176,13 +180,15 @@ fun RowScope.KeyView(
                 onClick { latestActivate(); true }
             }
             .pointerInput(key) {
+                val tapSlop = KEY_TAP_SLOP_DP.dp.toPx()
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     down.consume()
+                    val downPosition = down.position
                     isPressed = true
                     var released = false
                     var wasDragged = false
-                    var wasGlided = false
+                    var tracking = false
                     accumulatedDragX = 0f
                     try {
                         hapticManager.performKeyTap(view, latestHaptics, latestIntensity)
@@ -209,6 +215,7 @@ fun RowScope.KeyView(
                                 change.consume()
                                 break
                             }
+                            val position = change.position
                             if (key.type == KeyType.SPACE) {
                                 accumulatedDragX += change.positionChange().x
                                 if (abs(accumulatedDragX) >= dragStepThresholdPx) {
@@ -219,24 +226,31 @@ fun RowScope.KeyView(
                                     hapticManager.performCursorTick(view, latestHaptics)
                                 }
                                 change.consume()
-                            } else {
-                                val outsideKey = change.position.x !in 0f..size.width.toFloat() ||
-                                    change.position.y !in 0f..size.height.toFloat()
-                                if (outsideKey || wasGlided) {
-                                    if (isAlphabeticKey && latestGlideEnabled && latestGlideUpdate != null) {
-                                        wasGlided = true
-                                        isPressed = false
-                                        val rootPos = keyRootPosition + change.position
-                                        latestGlideUpdate?.invoke(key.primaryText[0].lowercaseChar(), rootPos)
-                                        change.consume()
-                                    } else {
-                                        break
-                                    }
+                            } else if (isAlphabeticKey && latestGlideUpdate != null) {
+                                // Letters: once the finger really leaves the key (beyond the tap slop) the grid
+                                // tracks the keys it crosses. On release it decides between a glide word and
+                                // committing the key under the finger (Gboard-style slide-to-correct).
+                                val outsideKey = position.x !in 0f..size.width.toFloat() ||
+                                    position.y !in 0f..size.height.toFloat()
+                                val travelled = (position - downPosition).getDistance()
+                                if (tracking || (outsideKey && travelled > tapSlop)) {
+                                    tracking = true
+                                    isPressed = false
+                                    latestGlideUpdate?.invoke(
+                                        key.primaryText[0].lowercaseChar(),
+                                        keyRootPosition + position
+                                    )
+                                    change.consume()
                                 }
+                            } else {
+                                // Other keys: forgive small drifts, cancel only when clearly slid away.
+                                val withinTolerance = position.x in -tapSlop..(size.width + tapSlop) &&
+                                    position.y in -tapSlop..(size.height + tapSlop)
+                                if (!withinTolerance) break
                             }
                         }
                         if (released) {
-                            if (wasGlided) {
+                            if (tracking) {
                                 latestGlideFinish?.invoke()
                             } else if (!wasDragged && key.type != KeyType.BACKSPACE) {
                                 latestActivate()
@@ -247,7 +261,7 @@ fun RowScope.KeyView(
                         isPressed = false
                         backspaceJob?.cancel()
                         backspaceJob = null
-                        if (wasGlided && !released) {
+                        if (tracking && !released) {
                             latestGlideCancel?.invoke()
                         }
                     }
@@ -255,40 +269,50 @@ fun RowScope.KeyView(
             },
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxSize()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 2.5.dp, vertical = 3.5.dp)
+                .scale(scale)
+                .clip(RoundedCornerShape(8.dp))
+                .background(keyBgColor),
+            contentAlignment = Alignment.Center
         ) {
-            // Secondary hint (e.g. number above top row)
-            if (key.secondaryText != null) {
-                Text(
-                    text = key.secondaryText,
-                    fontSize = 9.sp,
-                    color = theme.keySecondaryTextColor,
-                    lineHeight = 10.sp
-                )
-            }
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Secondary hint (e.g. number above top row)
+                if (key.secondaryText != null) {
+                    Text(
+                        text = key.secondaryText,
+                        fontSize = 9.sp,
+                        color = theme.keySecondaryTextColor,
+                        lineHeight = 10.sp
+                    )
+                }
 
-            if (key.type == KeyType.SPACE) {
-                val label = activeModelName?.let { "⚡ $it" } ?: "NeuralKey"
-                Text(
-                    text = label,
-                    fontSize = 11.sp,
-                    color = theme.accentPrimary.copy(alpha = 0.85f),
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                Text(
-                    text = displayText,
-                    fontSize = if (key.isFunctional) 14.sp else 19.sp,
-                    fontWeight = if (key.isFunctional) FontWeight.SemiBold else FontWeight.Normal,
-                    color = contentColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip
-                )
+                if (key.type == KeyType.SPACE) {
+                    val label = activeModelName?.let { "⚡ $it" } ?: "NeuralKey"
+                    Text(
+                        text = label,
+                        fontSize = 11.sp,
+                        color = theme.accentPrimary.copy(alpha = 0.85f),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else {
+                    Text(
+                        text = displayText,
+                        fontSize = if (key.isFunctional) 14.sp else 19.sp,
+                        fontWeight = if (key.isFunctional) FontWeight.SemiBold else FontWeight.Normal,
+                        color = contentColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Clip
+                    )
+                }
             }
         }
     }
