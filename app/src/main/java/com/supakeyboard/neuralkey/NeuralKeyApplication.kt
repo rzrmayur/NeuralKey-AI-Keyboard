@@ -46,7 +46,13 @@ class NeuralKeyApplication : Application() {
         applicationScope.launch(Dispatchers.IO) {
             try {
                 val words = java.util.zip.GZIPInputStream(assets.open("english_words.dict")).bufferedReader().use { it.readLines() }
-                val engine = SuggestionEngine(words)
+                val model = try {
+                    com.supakeyboard.neuralkey.ime.typing.LanguageModel.load { assets.open(it) }
+                } catch (e: java.io.IOException) {
+                    android.util.Log.w("NeuralKey", "Frequency language model unavailable; using dictionary only", e)
+                    com.supakeyboard.neuralkey.ime.typing.LanguageModel.EMPTY
+                }
+                val engine = SuggestionEngine(words, model)
                 engine.restoreMemory(keyMemoryStore.loadSnapshot())
                 engine.onMemoryUpdated = { snapshot ->
                     keyMemoryStore.saveSnapshot(snapshot)

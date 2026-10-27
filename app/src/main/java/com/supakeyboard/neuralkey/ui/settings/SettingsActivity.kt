@@ -909,6 +909,19 @@ private fun SmartTypingAndPostureTab(
     val nextWordEnabled by preferences.nextWordPredictionEnabled.collectAsState(initial = true)
     val glideTypingEnabled by preferences.glideTypingEnabled.collectAsState(initial = true)
     val liveTranscriptEnabled by preferences.liveTranscriptEnabled.collectAsState(initial = true)
+    val screenshotPasteEnabled by preferences.screenshotPasteEnabled.collectAsState(initial = false)
+    val screenshotPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        scope.launch { preferences.setScreenshotPasteEnabled(granted) }
+        if (!granted) {
+            Toast.makeText(
+                context,
+                "Allow photo access to paste your latest screenshot from the keyboard.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
     val oneHandedMode by preferences.oneHandedMode.collectAsState(initial = OneHandedMode.OFF)
     val splitOnFold by preferences.splitKeyboardOnFold.collectAsState(initial = true)
     val hapticEnabled by preferences.hapticFeedbackEnabled.collectAsState(initial = true)
@@ -1246,6 +1259,46 @@ private fun SmartTypingAndPostureTab(
                     checked = soundEnabled,
                     accentColor = accentColor,
                     onCheckedChange = { scope.launch { preferences.setSoundFeedbackEnabled(it) } }
+                )
+            }
+        }
+
+        // 3a. Screenshot & image paste (Gboard-style)
+        item {
+            GlassCard {
+                Text(
+                    text = "🖼️ Screenshot & Image Paste",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Copy an image or tap Copy on a screenshot and the keyboard offers a one-tap Paste chip, exactly like Gboard. Images stay on your device.",
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = Color(0xFF94A3B8)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                ModernToggleRow(
+                    title = "Offer my latest screenshot",
+                    subtitle = "Optional. Needs photo access to find the screenshot you just took, so you don't have to tap Copy first. Only the newest screenshot from the last 2 minutes is read.",
+                    checked = screenshotPasteEnabled &&
+                        com.supakeyboard.neuralkey.ime.clipboard.ScreenshotFinder.hasPermission(context),
+                    accentColor = accentColor,
+                    onCheckedChange = { enable ->
+                        if (!enable) {
+                            scope.launch { preferences.setScreenshotPasteEnabled(false) }
+                        } else if (com.supakeyboard.neuralkey.ime.clipboard.ScreenshotFinder.hasPermission(context)) {
+                            scope.launch { preferences.setScreenshotPasteEnabled(true) }
+                        } else {
+                            screenshotPermissionLauncher.launch(
+                                com.supakeyboard.neuralkey.ime.clipboard.ScreenshotFinder.requiredPermission()
+                            )
+                        }
+                    }
                 )
             }
         }

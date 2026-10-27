@@ -107,6 +107,16 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
             if (learnMemory) engine()?.recordWord(suggestion, prev)
             return true
         }
+        // Support selecting a sentence-starter suggestion in an empty field or after a line break
+        val before = editor.beforeCursor(8)
+        val atFieldStart = prev == null && (after == null || after.isWhitespace()) &&
+            (before.isEmpty() || (before.isNotEmpty() && before.all { it.isWhitespace() }))
+        if (atFieldStart) {
+            undo = null
+            editor.commit(suggestion + " ")
+            if (learnMemory) engine()?.recordWord(suggestion, null)
+            return true
+        }
         return false
     }
 
@@ -139,7 +149,7 @@ class TypingController(private val engine: () -> SuggestionEngine?) {
                 editor.commit(previous.original)
             }
             previous.learnedWord?.let { engine()?.unlearnWord(it, previous.previousWord) }
-            engine()?.recordWord(previous.original, previous.previousWord)
+            engine()?.recordWord(previous.original, previous.previousWord, force = true)
             keepOriginalOnce = previous.original
         } else {
             val before = editor.beforeCursor(2)

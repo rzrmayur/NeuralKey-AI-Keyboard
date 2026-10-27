@@ -3,4 +3,8 @@
     <cache-path
         name="gif_sticker_cache"
         path="gif_sticker_cache/" />
+    <!-- Clipboard images & screenshots committed via InputConnectionCompat.commitContent -->
+    <files-path
+        name="clipboard_images"
+        path="clipboard_images/" />
 </paths>

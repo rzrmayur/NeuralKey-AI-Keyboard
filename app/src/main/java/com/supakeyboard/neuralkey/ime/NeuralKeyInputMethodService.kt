@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.supakeyboard.neuralkey.NeuralKeyApplication
+import com.supakeyboard.neuralkey.ime.clipboard.ImagePasteResult
 import com.supakeyboard.neuralkey.ime.lifecycle.LifecycleInputMethodService
 import com.supakeyboard.neuralkey.ime.media.GifStickerRepository
 import com.supakeyboard.neuralkey.ime.media.MediaCommitResult
@@ -154,6 +155,8 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         super.onStartInputView(info, restarting)
         inputHost?.refreshInsets()
         runCatching { (application as NeuralKeyApplication).clipboardHistoryManager.syncFromSystemClipboard() }
+        viewModel.checkForNewScreenshot()
+        viewModel.refreshPendingImage()
         updateDraftAfterEdit()
     }
 
@@ -368,6 +371,8 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
                 viewModel.closeClipboardFusion()
                 updateDraftAfterEdit()
             }
+            is KeyboardIntent.PasteClipboardImage -> pasteClipboardImage(intent.id)
+            is KeyboardIntent.DismissPendingImage -> viewModel.dismissPendingImage(intent.id)
             is KeyboardIntent.TogglePinClipboardItem -> viewModel.togglePinClipboardItem(intent.id)
             is KeyboardIntent.DeleteClipboardItem -> viewModel.deleteClipboardItem(intent.id)
             is KeyboardIntent.ClearUnpinnedClipboard -> viewModel.clearUnpinnedClipboard()
@@ -566,6 +571,38 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         ic.setSelection(extracted.startOffset + position, extracted.startOffset + position)
     }
 
+    /**
+     * Gboard-style image paste: commits the stored image into the focused field through
+     * `InputConnectionCompat.commitContent`. If the field only accepts text, the image is put on the
+     * system clipboard so the host app's own Paste action can take it.
+     */
+    private fun pasteClipboardImage(id: Long) {
+        val manager = (application as NeuralKeyApplication).clipboardHistoryManager
+        val item = manager.findItem(id)
+        val fileName = item?.imageFile
+        val mime = item?.imageMime
+        if (item == null || fileName == null || mime == null || !manager.imageStore.exists(fileName)) {
+            toast("That image is no longer available")
+            viewModel.closeClipboardFusion()
+            return
+        }
+        typing.reset()
+        val result = manager.imageStore.commitToEditor(fileName, mime, currentInputConnection, currentInputEditorInfo)
+        viewModel.dismissPendingImage(id)
+        viewModel.closeClipboardFusion()
+        when (result) {
+            ImagePasteResult.INSERTED -> Unit
+            ImagePasteResult.COPIED_TO_CLIPBOARD ->
+                toast("This field can't take images — image copied, long-press the field and tap Paste")
+            ImagePasteResult.FAILED -> toast("Couldn't paste the image")
+        }
+        updateDraftAfterEdit()
+    }
+
+    private fun toast(message: String) {
+        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
     private fun updateDraftAfterEdit() {
         if (!inputActive) return
         viewModel.updateDraft(extractCurrentDraft())
@@ -594,7 +631,13 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
         val prevWord = typing.previousWord(editor)
         val engine = (application as NeuralKeyApplication).suggestionEngine
         if (word == null) {
-            if (state.nextWordPredictionEnabled && prevWord != null && editor.beforeCursor(1) == " " && engine != null) {
+            val beforeCursor = editor.beforeCursor(3)
+            val atSentenceStart = beforeCursor.isEmpty() || beforeCursor.trimEnd().let { trimmed ->
+                trimmed.isEmpty() || trimmed.last() in ".!?\n"
+            }
+            if (state.nextWordPredictionEnabled && prevWord == null && atSentenceStart && engine != null) {
+                viewModel.updateSuggestions(engine.sentenceStartSuggestions())
+            } else if (state.nextWordPredictionEnabled && prevWord != null && editor.beforeCursor(1) == " " && engine != null) {
                 suggestionJob = lifecycleScope.launch {
                     val nextWords = withContext(Dispatchers.Default) { engine.nextWordSuggestions(prevWord) }
                     val latest = viewModel.uiState.value
@@ -609,6 +652,8 @@ class NeuralKeyInputMethodService : LifecycleInputMethodService() {
             }
             return
         }
+        // Typing a word means the user moved on: retire the "paste image" chip so suggestions return.
+        state.pendingImage?.let { viewModel.dismissPendingImage(it.id) }
         viewModel.updateSuggestions(listOf(word))
         if (engine == null) return
         suggestionJob = lifecycleScope.launch {

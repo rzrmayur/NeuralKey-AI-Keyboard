@@ -90,7 +90,15 @@ fun AICommandBar(
         }
         val showSuggestions = uiState.suggestionsEnabled && !uiState.isSensitiveField &&
             InputFieldPolicy.allowsSuggestions(uiState.inputType) && uiState.suggestions.isNotEmpty()
-        if (showSuggestions) {
+        val pendingImage = uiState.pendingImage
+        if (pendingImage != null && !uiState.isSensitiveField) {
+            PendingImageChip(
+                item = pendingImage,
+                theme = theme,
+                onIntent = onIntent,
+                modifier = Modifier.weight(1f)
+            )
+        } else if (showSuggestions) {
             Row(Modifier.weight(1f).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically) {
                 uiState.suggestions.take(3).forEachIndexed { idx, word ->
                     Box(

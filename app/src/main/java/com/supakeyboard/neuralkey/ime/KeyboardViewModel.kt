@@ -9,6 +9,9 @@ import androidx.lifecycle.viewModelScope
 import com.supakeyboard.neuralkey.NeuralKeyApplication
 import com.supakeyboard.neuralkey.data.db.entity.UserPromptEntity
 import com.supakeyboard.neuralkey.ime.clipboard.ClipboardHistoryManager
+import com.supakeyboard.neuralkey.ime.clipboard.ClipboardImageStore
+import com.supakeyboard.neuralkey.ime.clipboard.ClipboardItem
+import com.supakeyboard.neuralkey.ime.clipboard.ScreenshotFinder
 import com.supakeyboard.neuralkey.ime.media.MediaTabCategory
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardMode
 import com.supakeyboard.neuralkey.ime.mvi.KeyboardUiState
@@ -105,10 +108,21 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
                     _uiState.update { it.copy(splitKeyboardOnFold = split) }
                 }
             }
+            viewModelScope.launch {
+                prefs.screenshotPasteEnabled.collect { enabled ->
+                    screenshotPasteEnabled = enabled
+                    if (enabled) checkForNewScreenshot()
+                }
+            }
             if (clipMgr != null) {
                 viewModelScope.launch {
                     clipMgr.items.collect { items ->
-                        _uiState.update { it.copy(clipboardItems = items) }
+                        _uiState.update {
+                            it.copy(
+                                clipboardItems = items,
+                                pendingImage = pendingImageFor(items, it.fieldAcceptsImages)
+                            )
+                        }
                     }
                 }
             }
@@ -169,12 +183,55 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun updateInputContext(packageName: String?, editorInfo: EditorInfo?) {
+        val acceptsImages = ClipboardImageStore.acceptsImages(editorInfo)
         _uiState.update { current ->
             current.copy(
                 targetPackageName = packageName,
                 imeAction = editorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-                    ?: EditorInfo.IME_ACTION_UNSPECIFIED
+                    ?: EditorInfo.IME_ACTION_UNSPECIFIED,
+                fieldAcceptsImages = acceptsImages,
+                pendingImage = pendingImageFor(current.clipboardItems, acceptsImages)
             )
+        }
+    }
+
+    // ── Image & screenshot paste (Gboard-style) ─────────────────────
+
+    private var screenshotPasteEnabled = false
+    private var dismissedImageId: Long? = null
+    private var lastImportedScreenshotId: Long = -1L
+
+    /** The newest clip, if it is a fresh image the focused field can take. */
+    private fun pendingImageFor(items: List<ClipboardItem>, fieldAcceptsImages: Boolean): ClipboardItem? {
+        if (!fieldAcceptsImages) return null
+        val newest = items.maxByOrNull { it.timestampMs } ?: return null
+        if (!newest.isImage || newest.id == dismissedImageId) return null
+        return newest.takeIf { System.currentTimeMillis() - it.timestampMs <= PENDING_IMAGE_WINDOW_MS }
+    }
+
+    fun dismissPendingImage(id: Long) {
+        dismissedImageId = id
+        _uiState.update { it.copy(pendingImage = null) }
+    }
+
+    /** Re-evaluates the chip, e.g. when the keyboard is shown again after a screenshot was taken. */
+    fun refreshPendingImage() {
+        _uiState.update { it.copy(pendingImage = pendingImageFor(it.clipboardItems, it.fieldAcceptsImages)) }
+    }
+
+    /**
+     * Imports the newest screenshot when the user opted in and granted media access.
+     * Runs off the main thread; identical screenshots are only imported once.
+     */
+    fun checkForNewScreenshot() {
+        val manager = clipboardManager ?: return
+        if (!screenshotPasteEnabled) return
+        val context = getApplication<Application>()
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val shot = ScreenshotFinder.findRecent(context, PENDING_IMAGE_WINDOW_MS / 1000) ?: return@launch
+            if (shot.mediaId == lastImportedScreenshotId) return@launch
+            lastImportedScreenshotId = shot.mediaId
+            manager.addImageFromUri(shot.uri)
         }
     }
 
@@ -724,5 +781,8 @@ class KeyboardViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val TAG = "KeyboardViewModel"
+
+        /** How long a freshly copied image / screenshot stays offered as a one-tap chip. */
+        const val PENDING_IMAGE_WINDOW_MS = 2 * 60 * 1000L
     }
 }

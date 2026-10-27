@@ -201,6 +201,10 @@ sealed interface KeyboardIntent {
     object OpenClipboardFusion : KeyboardIntent
     object CloseClipboardFusion : KeyboardIntent
     data class PasteClipboardItem(val text: String) : KeyboardIntent
+    /** Pastes a clipboard image / screenshot into the focused field (Gboard-style image paste). */
+    data class PasteClipboardImage(val id: Long) : KeyboardIntent
+    /** Hides the "paste screenshot" chip for the given image until a newer one arrives. */
+    data class DismissPendingImage(val id: Long) : KeyboardIntent
     data class TogglePinClipboardItem(val id: Long) : KeyboardIntent
     data class DeleteClipboardItem(val id: Long) : KeyboardIntent
     object ClearUnpinnedClipboard : KeyboardIntent
@@ -239,6 +243,10 @@ data class KeyboardUiState(
     val availableModels: List<OpenRouterModelEntity> = emptyList(),
     val userPrompts: List<UserPromptEntity> = emptyList(),
     val clipboardItems: List<ClipboardItem> = emptyList(),
+    /** A just-copied image or fresh screenshot offered as a one-tap chip in the suggestion strip. */
+    val pendingImage: ClipboardItem? = null,
+    /** True when the focused field declares support for image content (commitContent). */
+    val fieldAcceptsImages: Boolean = false,
     val currentDraft: String = "",
     val targetPackageName: String? = null,
     val imeAction: Int = android.view.inputmethod.EditorInfo.IME_ACTION_UNSPECIFIED,

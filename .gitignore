@@ -28,3 +28,6 @@ gen/
 out/
 app/build/
 .kotlin/
+
+# Language-model build cache (downloaded source corpora)
+tools/.cache/

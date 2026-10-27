@@ -232,7 +232,7 @@ fun ClipboardFusionPanel(
                         color = theme.keyTextColor
                     )
                     Text(
-                        text = "Copy any message, email, or snippet in any app to unlock 1-tap Paste, AI Context Reply, TL;DR, and Translate.",
+                        text = "Copy any message, email, snippet, image or screenshot in any app to unlock 1-tap Paste, AI Context Reply, TL;DR, and Translate.",
                         fontSize = 11.sp,
                         color = theme.keySecondaryTextColor
                     )
@@ -263,16 +263,35 @@ fun ClipboardFusionPanel(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = clip.text,
-                                fontSize = 12.sp,
-                                color = theme.keyTextColor,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { onIntent(KeyboardIntent.PasteClipboardItem(clip.text)) }
-                            )
+                            if (clip.isImage) {
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { onIntent(KeyboardIntent.PasteClipboardImage(clip.id)) },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    ClipboardImageThumbnail(item = clip, size = 52.dp, theme = theme)
+                                    Text(
+                                        text = "🖼️ Image / screenshot",
+                                        fontSize = 12.sp,
+                                        color = theme.keyTextColor,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = clip.text,
+                                    fontSize = 12.sp,
+                                    color = theme.keyTextColor,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { onIntent(KeyboardIntent.PasteClipboardItem(clip.text)) }
+                                )
+                            }
                             IconButton(
                                 onClick = { onIntent(KeyboardIntent.TogglePinClipboardItem(clip.id)) },
                                 modifier = Modifier.size(26.dp)
@@ -304,30 +323,39 @@ fun ClipboardFusionPanel(
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            MiniActionPill(
-                                label = "📥 Paste",
-                                bg = theme.accentPrimary,
-                                fg = onThemeAccent(theme.accentPrimary),
-                                onClick = { onIntent(KeyboardIntent.PasteClipboardItem(clip.text)) }
-                            )
-                            MiniActionPill(
-                                label = "💬 AI Reply",
-                                bg = theme.keyFunctionalBgColor,
-                                fg = theme.accentPrimary,
-                                onClick = { onIntent(KeyboardIntent.ReplyToClipboardItem(clip.text)) }
-                            )
-                            MiniActionPill(
-                                label = "📝 TL;DR",
-                                bg = theme.keyFunctionalBgColor,
-                                fg = theme.keyTextColor,
-                                onClick = { onIntent(KeyboardIntent.SummarizeClipboardItem(clip.text)) }
-                            )
-                            MiniActionPill(
-                                label = "🌐 Translate",
-                                bg = theme.keyFunctionalBgColor,
-                                fg = theme.keyTextColor,
-                                onClick = { onIntent(KeyboardIntent.TranslateClipboardItem(clip.text)) }
-                            )
+                            if (clip.isImage) {
+                                MiniActionPill(
+                                    label = "🖼️ Paste image",
+                                    bg = theme.accentPrimary,
+                                    fg = onThemeAccent(theme.accentPrimary),
+                                    onClick = { onIntent(KeyboardIntent.PasteClipboardImage(clip.id)) }
+                                )
+                            } else {
+                                MiniActionPill(
+                                    label = "📥 Paste",
+                                    bg = theme.accentPrimary,
+                                    fg = onThemeAccent(theme.accentPrimary),
+                                    onClick = { onIntent(KeyboardIntent.PasteClipboardItem(clip.text)) }
+                                )
+                                MiniActionPill(
+                                    label = "💬 AI Reply",
+                                    bg = theme.keyFunctionalBgColor,
+                                    fg = theme.accentPrimary,
+                                    onClick = { onIntent(KeyboardIntent.ReplyToClipboardItem(clip.text)) }
+                                )
+                                MiniActionPill(
+                                    label = "📝 TL;DR",
+                                    bg = theme.keyFunctionalBgColor,
+                                    fg = theme.keyTextColor,
+                                    onClick = { onIntent(KeyboardIntent.SummarizeClipboardItem(clip.text)) }
+                                )
+                                MiniActionPill(
+                                    label = "🌐 Translate",
+                                    bg = theme.keyFunctionalBgColor,
+                                    fg = theme.keyTextColor,
+                                    onClick = { onIntent(KeyboardIntent.TranslateClipboardItem(clip.text)) }
+                                )
+                            }
                         }
                     }
                 }
